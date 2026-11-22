@@ -1,6 +1,7 @@
-// Audio worklet: runs an app's engine (compiled C) on the audio thread.
-// The page posts parameter snapshots; this posts output levels back, and,
-// for apps whose engine reports state (the orrery's orbits), that too.
+// Audio worklet for the Spheres website: runs the engine (the Brick's C, as
+// WebAssembly) on the audio thread. The page posts the app's snapshots;
+// this posts back the engine's state, the output levels and, while the
+// page records, the sound itself in quarter-second chunks.
 
 function stubImports(module) {
   const imports = {};
@@ -10,7 +11,7 @@ function stubImports(module) {
   return imports;
 }
 
-class DroneProcessor extends AudioWorkletProcessor {
+class SpheresProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.x = null;
@@ -18,6 +19,7 @@ class DroneProcessor extends AudioWorkletProcessor {
     this.peak = [0, 0];
     this.frames = 0;
     this.stateFrames = 0;
+    this.rec = null;
     this.port.onmessage = (e) => this.onMessage(e.data);
   }
 
@@ -28,7 +30,7 @@ class DroneProcessor extends AudioWorkletProcessor {
       const x = instance.exports;
       x._initialize?.();
       if (!x.au_init(sampleRate)) {
-        this.port.postMessage({ type: "error", message: "engine failed to start" });
+        this.port.postMessage({ type: "error", message: "the engine did not start" });
         return;
       }
       this.x = x;
@@ -37,6 +39,19 @@ class DroneProcessor extends AudioWorkletProcessor {
     } else if (msg.type === "snapshot") {
       if (this.x) this.apply(msg.bytes);
       else this.pending = msg.bytes;
+    } else if (msg.type === "record") {
+      if (msg.on) {
+        const size = 2 * Math.round(sampleRate / 4);     // a quarter second, both channels
+        this.rec = { size, buf: new Float32Array(size), n: 0 };
+      } else if (this.rec) {
+        const r = this.rec;
+        this.rec = null;
+        if (r.n) {
+          const part = r.buf.slice(0, r.n);
+          this.port.postMessage({ type: "chunk", data: part }, [part.buffer]);
+        }
+        this.port.postMessage({ type: "recorded" });
+      }
     }
   }
 
@@ -59,6 +74,18 @@ class DroneProcessor extends AudioWorkletProcessor {
         if (a > this.peak[c]) this.peak[c] = a;
       }
     }
+    if (this.rec) {
+      const r = this.rec;
+      for (let i = 0; i < n; i++) {
+        r.buf[r.n++] = chans[0][i];
+        r.buf[r.n++] = chans[1][i];
+        if (r.n === r.size) {                          // handed over whole: its buffer goes with it
+          this.port.postMessage({ type: "chunk", data: r.buf }, [r.buf.buffer]);
+          r.buf = new Float32Array(r.size);
+          r.n = 0;
+        }
+      }
+    }
     this.frames += n;
     if (this.frames >= sampleRate / 30) {
       this.port.postMessage({ type: "levels", l: this.peak[0], r: this.peak[1] });
@@ -66,7 +93,7 @@ class DroneProcessor extends AudioWorkletProcessor {
       this.frames = 0;
     }
     this.stateFrames += n;
-    if (this.x.au_state && this.stateFrames >= sampleRate / 60) {
+    if (this.stateFrames >= sampleRate / 60) {
       this.stateFrames = 0;
       const bytes = new Uint8Array(this.x.memory.buffer, this.x.au_state(), this.x.au_state_size()).slice();
       this.port.postMessage({ type: "state", bytes }, [bytes.buffer]);
@@ -75,4 +102,4 @@ class DroneProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor("drone", DroneProcessor);
+registerProcessor("spheres", SpheresProcessor);
