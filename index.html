@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spheres</title>
+<style>
+  :root {
+    --page: #0c0d10; --ink: #e8e9ec; --muted: #8b909b; --rule: #1f2228;
+    --body-hi: #45484f; --body-lo: #2a2c31; --btn: #1c1e23; --btn-on: #dfe2e8; --label: #a9adb6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; }
+  .layout { display: flex; flex-wrap: wrap; gap: 40px; justify-content: center; align-items: flex-start; padding: 56px 16px 40px; }
+
+  .device {
+    position: relative; width: min(560px, 100%); padding: 26px 22px 30px;
+    border-radius: 34px 34px 48px 48px;
+    background: linear-gradient(160deg, var(--body-hi), var(--body-lo));
+    box-shadow: 0 30px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.08);
+    user-select: none; -webkit-user-select: none;
+  }
+  button.ctl {
+    font: 600 14px system-ui, sans-serif; color: var(--label); background: var(--btn);
+    border: 0; padding: 0; cursor: pointer; touch-action: none;
+    box-shadow: 0 3px 0 #0a0b0d, inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  button.ctl.on { background: var(--btn-on); color: #111; box-shadow: 0 1px 0 #0a0b0d; transform: translateY(2px); }
+  button.ctl:focus-visible { outline: 2px solid #8cc8ff; outline-offset: 2px; }
+
+  .shoulder { position: absolute; height: 24px; width: 76px; border-radius: 12px 12px 4px 4px; font-size: 11px; }
+  .shoulder[data-btn="L2"] { left: 22px; top: -20px; }
+  .shoulder[data-btn="L1"] { left: 104px; top: -14px; }
+  .shoulder[data-btn="R1"] { right: 104px; top: -14px; }
+  .shoulder[data-btn="R2"] { right: 22px; top: -20px; }
+
+  .bezel { position: relative; background: #050506; border-radius: 16px; padding: 14px; }
+  canvas { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 3px; background: #0d0f13; }
+  .banner {
+    position: absolute; inset: 14px; display: grid; place-items: center; text-align: center;
+    background: rgba(5,6,8,.62); color: #fff; font-weight: 600; border-radius: 3px; cursor: pointer;
+  }
+  .banner[hidden] { display: none; }
+
+  .controls {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; justify-items: center;
+    gap: 22px 6px; margin-top: 28px;
+  }
+  /* the controls shrink with a narrow screen, so a phone shows the whole handheld */
+  .dpad { position: relative; width: min(132px, 31vw); height: min(132px, 31vw); }
+  .dpad button { position: absolute; width: 33.34%; height: 33.34%; border-radius: 6px; }
+  .dpad [data-btn="UP"] { left: 33.33%; top: 0; }
+  .dpad [data-btn="DOWN"] { left: 33.33%; bottom: 0; }
+  .dpad [data-btn="LEFT"] { left: 0; top: 33.33%; }
+  .dpad [data-btn="RIGHT"] { right: 0; top: 33.33%; }
+  .dpad .hub { position: absolute; left: 33.33%; top: 33.33%; width: 33.34%; height: 33.34%; background: var(--btn); }
+
+  .face { position: relative; width: min(144px, 33vw); height: min(144px, 33vw); }
+  .face button { position: absolute; width: 34.7%; height: 34.7%; border-radius: 50%; font-size: 16px; }
+  .face [data-btn="X"] { left: 32.65%; top: 0; }
+  .face [data-btn="Y"] { left: 0; top: 32.65%; }
+  .face [data-btn="A"] { right: 0; top: 32.65%; }
+  .face [data-btn="B"] { left: 32.65%; bottom: 0; }
+
+  .mid { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .pill { width: 58px; height: 20px; border-radius: 10px; font-size: 10px; letter-spacing: .06em; }
+  .menu { width: 32px; height: 32px; border-radius: 50%; font-size: 9px; }
+
+  .stick {
+    position: relative; width: min(116px, 28vw); height: min(116px, 28vw); border-radius: 50%; cursor: grab; touch-action: none;
+    background: radial-gradient(circle at 50% 45%, #16181c, #0a0b0d); box-shadow: inset 0 3px 9px rgba(0,0,0,.75);
+  }
+  .knob {
+    position: absolute; left: 22.5%; top: 22.5%; width: 55%; height: 55%;
+    border-radius: 50%; background: radial-gradient(circle at 40% 35%, #50535b, #222429);
+    box-shadow: 0 4px 10px rgba(0,0,0,.55); pointer-events: none;
+  }
+  .knob.on { box-shadow: 0 0 0 3px var(--btn-on), 0 4px 10px rgba(0,0,0,.55); }
+  .name { text-align: center; color: rgba(255,255,255,.2); letter-spacing: .35em; font: 600 11px system-ui, sans-serif; margin-top: 20px; }
+
+  .help { width: min(430px, 100%); }
+  .help h1 { font-size: 21px; margin: 0 0 6px; }
+  .help h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 26px 0 8px; }
+  .help p, .help li { color: #c5c8cf; margin: 0 0 8px; }
+  .help ol { padding-left: 20px; margin: 0; }
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 5px 6px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  td:first-child { color: var(--muted); width: 38%; }
+  kbd { font: 12px ui-monospace, Menlo, Consolas, monospace; background: #1a1c21; border: 1px solid #2d3139; border-radius: 4px; padding: 1px 6px; color: var(--ink); }
+  .status { font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--muted); white-space: pre-line; }
+  .apps { display: flex; gap: 6px; margin: 0 0 18px; }
+  .apps a { color: var(--muted); text-decoration: none; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--rule); }
+  .apps a:hover { color: var(--ink); }
+  .apps a.current { color: #111; background: var(--btn-on); border-color: var(--btn-on); }
+  [hidden] { display: none !important; }
+  .saves { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; }
+  .saves button, .saves label {
+    font: 600 13px system-ui, sans-serif; color: var(--ink); background: #1a1c21; border: 1px solid #2d3139;
+    border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  .saves button:hover, .saves label:hover { border-color: #4a505c; }
+  .saves input { display: none; }
+  @media (max-width: 600px) {
+    .layout { padding: 40px 12px 32px; gap: 28px; }
+    .device { padding: 20px 12px 24px; border-radius: 28px 28px 40px 40px; }
+    .controls { gap: 18px 4px; }
+    .shoulder { width: 64px; }
+    .shoulder[data-btn="L1"] { left: 90px; }
+    .shoulder[data-btn="R1"] { right: 90px; }
+  }
+</style>
+</head>
+<body>
+<main class="layout">
+  <section class="device" aria-label="Handheld simulator">
+    <button class="ctl shoulder" data-btn="L2">L2</button>
+    <button class="ctl shoulder" data-btn="L1">L1</button>
+    <button class="ctl shoulder" data-btn="R1">R1</button>
+    <button class="ctl shoulder" data-btn="R2">R2</button>
+
+    <div class="bezel">
+      <canvas id="screen" width="1024" height="768"></canvas>
+      <div class="banner" id="banner">Click here or press any key to start sound</div>
+    </div>
+
+    <div class="controls">
+      <div class="dpad">
+        <button class="ctl" data-btn="UP" aria-label="Up">&#9650;</button>
+        <button class="ctl" data-btn="LEFT" aria-label="Left">&#9664;</button>
+        <div class="hub"></div>
+        <button class="ctl" data-btn="RIGHT" aria-label="Right">&#9654;</button>
+        <button class="ctl" data-btn="DOWN" aria-label="Down">&#9660;</button>
+      </div>
+      <div class="mid">
+        <button class="ctl menu" data-btn="MENU">MENU</button>
+      </div>
+      <div class="face">
+        <button class="ctl" data-btn="X">X</button>
+        <button class="ctl" data-btn="Y">Y</button>
+        <button class="ctl" data-btn="A">A</button>
+        <button class="ctl" data-btn="B">B</button>
+      </div>
+
+      <div class="stick" id="stickL" aria-label="Left stick"><div class="knob"></div></div>
+      <div class="mid">
+        <button class="ctl pill" data-btn="SELECT">SELECT</button>
+        <button class="ctl pill" data-btn="START">START</button>
+      </div>
+      <div class="stick" id="stickR" aria-label="Right stick"><div class="knob"></div></div>
+    </div>
+    <div class="name" id="devname">DRONE SIM</div>
+  </section>
+
+  <aside class="help">
+    <h1 id="title">Spheres</h1>
+    <p>Drones at the centre, arpeggios circling them: a generative instrument made for the TrimUI Brick Pro handheld, running here as the same program in your browser.</p>
+    <p>Runs the same C code as the device build. The app draws the screen, and the engine
+      plays in an audio worklet.</p>
+    <p class="status" id="status">loading...</p>
+
+    <section data-app="spheres">
+    <h2>Try this</h2>
+    <ol>
+      <li>Press <b>START</b>. At the centre the sun and three planets drone and orbit, as in the
+        orrery. Round them, planets 4, 5 and 6 each play an arpeggio; its notes sit on its circle,
+        coloured by scale degree, and light as they sound.</li>
+      <li>Top left of the sky, the bar you are in (counted in one arp planet's meter) and its beats.
+        <b>MENU</b> on any page loops: the bar you are in is the middle, and the bars up to its end and
+        as many after it (4 and 4 to start with) play again and again, exactly: the notes and their
+        dice, the orbits, comets, every setting and stick move. Not the sound, which rings on over
+        each jump back, and the SOUND page stays yours. <b>MENU</b> again carries on from there.
+        The LOOP page has the same button (<b>A</b>), the bars each side and the planet that counts.</li>
+      <li><b>SELECT</b> to DRONES: the sun and planets 1 to 3 (<b>L1 / R1</b>), their voice, speed
+        (pitch and orbit together), orbit and moons, and the space they share: root, gravity, wander.
+        Under Root, Note names it (equal tempered, A at 440 Hz); <b>&#9664; &#9654;</b> there jump the
+        root from note to note, <b>A</b> puts it on the nearest. Everything over it stays in just intervals.</li>
+      <li><b>SELECT</b> to ARPS: planets 4 to 6 (<b>L1 / R1</b>). Each has its own instrument, scale
+        (43 just scales, Balkan ones among them), notes (the scale or its chord), range, pattern, note length, meter, retrig
+        and chance. <b>A</b> on Scale or Meter gives it to every arp planet.</li>
+      <li>Retrig starts an arp over every 1, 2 or 4 bars, or makes it follow another arp planet: a
+        new pass each time that one sounds a note. Retrig chance skips some start overs; Restart
+        from begins each one at the first note, the note after last time's, or any note.</li>
+      <li>CHANGE keeps a pass from simply repeating: Mutate changes some of its notes every so
+        many bars (Mutate every), and the changes stay; Chords moves it to another chord of the
+        scale every 2 to 16 bars, and home again. A planet that follows another takes its chord.</li>
+      <li>On the sky, an arp planet's <b>left stick</b> steps its note length, <b>X</b> turns its
+        metronome on (a click on each beat of its meter); <b>R2 + right stick</b> sets the tempo.</li>
+      <li>SOUND has the drones' effects and the notes' effects apart: each its own filter, delay,
+        reverb and level.</li>
+    </ol>
+    </section>
+
+    <h2>Keyboard</h2>
+    <table>
+      <tr><td>D-pad</td><td><kbd>&larr;</kbd> <kbd>&uarr;</kbd> <kbd>&darr;</kbd> <kbd>&rarr;</kbd></td></tr>
+      <tr><td>A / B / X / Y</td><td><kbd>X</kbd> <kbd>Z</kbd> <kbd>S</kbd> <kbd>A</kbd></td></tr>
+      <tr><td>L1 / R1, L2 / R2</td><td><kbd>Q</kbd> <kbd>W</kbd>, <kbd>1</kbd> <kbd>2</kbd></td></tr>
+      <tr><td>Left stick</td><td><kbd>T</kbd> <kbd>F</kbd> <kbd>G</kbd> <kbd>H</kbd> (holding longer pushes further)</td></tr>
+      <tr><td>Right stick</td><td><kbd>I</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></td></tr>
+      <tr><td>L3 / R3 (fine mode)</td><td><kbd>E</kbd> <kbd>R</kbd>, or tap a stick</td></tr>
+      <tr><td>SELECT / START</td><td><kbd>Backspace</kbd> / <kbd>Enter</kbd></td></tr>
+      <tr><td>MENU</td><td><kbd>Esc</kbd></td></tr>
+    </table>
+    <p style="margin-top:10px">With the mouse, click buttons and drag the sticks; a stick springs back when you
+      let go. A connected gamepad also works.</p>
+
+    <h2>Saves</h2>
+    <p>The SAVES page (SELECT until it shows) keeps eight slots: <b>X</b> saves the current setup into the
+      chosen slot, <b>A</b> loads it, and either asks for a second press before it replaces something. Slots
+      stay in this browser. To keep them elsewhere or move them:</p>
+    <div class="saves">
+      <button type="button" id="exportSaves">Download saves</button>
+      <label>Load a saves file<input type="file" id="importSaves" accept=".json,application/json"></label>
+    </div>
+    <p class="status" id="savesNote"></p>
+
+    <h2>Not simulated</h2>
+    <p>The device's speakers, its CPU limits and the feel of its sticks.</p>
+  </aside>
+</main>
+<p class="name" style="margin:0 0 28px">SPHERES &middot; type: Go fonts, BSD licence (<a href="LICENSE-fonts.txt" style="color:inherit">details</a>)</p>
+<script type="module" src="sim.js"></script>
+</body>
+</html>
