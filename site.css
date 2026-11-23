@@ -361,12 +361,6 @@ select.pick:hover { border-color: var(--line2); }
 .piano .on { background: var(--drone); color: #0b0e13; font-weight: 700; }
 .piano .near { box-shadow: inset 0 -4px 0 var(--drone); }
 .hint { margin: 0 0 12px; font-size: 12px; color: var(--faint); }
-/* Fine tune: cents from the note, the bar growing from the middle */
-.fine-line { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: 10px; align-items: center; margin: 0 0 10px; }
-.fine-line > label { font-size: 12.5px; color: var(--dim); }
-.vf.fine { justify-content: center; font: 600 13px var(--mono); }
-.vf.fine .mid { position: absolute; left: 50%; top: 6px; bottom: 6px; width: 1px; background: var(--line2); }
-.vf.fine .fill { height: 3px; }
 .rows { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px 10px; align-items: center; }
 .rows > label { font-size: 12.5px; color: var(--dim); }
 .live { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }

@@ -155,11 +155,10 @@ class Field {
     return m.min + p * (m.max - m.min);
   }
 
-  // pixels of drag for the whole range: speeds an octave per 200, the root
-  // per 600 (2 cents a pixel; Fine below goes finer)
+  // pixels of drag for the whole range: speeds an octave per 200 (a pitch
+  // field, the root, goes by how fast it is dragged instead: pitchRate)
   span() {
     const m = this.m;
-    if (this.t === T.DRONES && this.r === D.ROOT) return 600 * Math.log2(m.max / m.min);
     if (this.t === T.DRONES && this.r === D.SPEED) return 200 * Math.log2(m.max / m.min);
     return this.opt.knob ? 240 : 320;
   }
@@ -198,7 +197,9 @@ class Field {
       if (this.m.perBody) choose(this.b);
       e.focus({ preventScroll: true });
       capture(e, ev.pointerId);
-      drag = { x: ev.clientX, y: ev.clientY, p0: clamp(this.pos(get(this.t, this.r, this.b)), 0, 1), moved: false };
+      const v = get(this.t, this.r, this.b);
+      drag = { x: ev.clientX, y: ev.clientY, p0: clamp(this.pos(v), 0, 1), moved: false,
+        v0: v, d: 0, cents: 0, t: ev.timeStamp, speed: 0 };
       ev.preventDefault();
     });
     e.addEventListener("pointermove", (ev) => {
@@ -210,6 +211,13 @@ class Field {
         pushUndo(this.key());
       }
       const d = this.opt.knob ? -dy : dx - dy;
+      if (this.opt.pitch) {                    // cents, by the step and how fast it came
+        const step = d - drag.d;
+        drag.d = d;
+        drag.cents += step * pitchRate(dragSpeed(drag, step, ev.timeStamp)) / (ev.shiftKey ? 10 : 1);
+        this.set(drag.v0 * Math.pow(2, drag.cents / 1200));
+        return;
+      }
       this.set(this.val(clamp(drag.p0 + d / (this.span() * (ev.shiftKey ? 10 : 1)), 0, 1)));
     });
     const end = () => { drag = null; };
@@ -292,132 +300,19 @@ class Field {
   }
 }
 
-// the root, finely: shown as cents from the nearest equal-tempered note
-// (A4 = 440), dragged a tenth of a cent a pixel (Shift: a hundredth)
-class Fine {
-  constructor() {
-    Object.assign(this, { v: NaN, shown: null, editing: null });
-    const e = this.el = el("div", "vf fine");
-    e.setAttribute("role", "slider");
-    e.tabIndex = 0;
-    e.setAttribute("aria-label", "Root, fine: cents from the nearest note");
-    e.setAttribute("aria-valuemin", "-50");
-    e.setAttribute("aria-valuemax", "50");
-    e.title = "The root, finely: drag a tenth of a cent a pixel (Shift: a hundredth) · arrow keys a tenth (Shift: a cent) · " +
-      "double-click to type cents · Delete: onto the note";
-    e.appendChild(el("span", "mid"));
-    this.fill = e.appendChild(el("span", "fill"));
-    this.txt = e.appendChild(el("span", "txt"));
-    this.bind();
-    fields.push(this);
-  }
+// a pitch dragged (the root, the sun on the sky): cents a pixel by how fast
+// the pointer moves, so a slow drag tunes and a quick one travels. A tenth of
+// a cent a pixel at 60 px/s (a twentieth, slower still), about one at 250,
+// ten at 800 and above
+const pitchRate = (speed) => clamp(0.1 * Math.pow(speed / 60, 1.8), 0.05, 12);
 
-  hz() { return get(T.DRONES, D.ROOT, 0); }
-
-  // cents from the nearest note
-  cents(hz) {
-    const m = 69 + 12 * Math.log2(hz / 440);
-    return 100 * (m - Math.round(m));
-  }
-
-  update(force) {
-    const hz = this.hz();
-    if (hz === this.v && !force) return;
-    this.v = hz;
-    const c = this.cents(hz), s = `${c < -0.05 ? "−" : "+"}${Math.abs(c).toFixed(1)} ¢`;
-    if (s !== this.shown) {
-      this.shown = s;
-      if (!this.editing) this.txt.textContent = s;
-      this.el.setAttribute("aria-valuenow", c.toFixed(1));
-      this.el.setAttribute("aria-valuetext", `${s} from ${text(T.DRONES, D.NOTE, 0).split(" ")[0]}`);
-    }
-    const w = clamp(Math.abs(c) / 50, 0, 1) * 50;
-    this.fill.style.left = `${(c < 0 ? 50 - w : 50).toFixed(2)}%`;
-    this.fill.style.width = `${w.toFixed(2)}%`;
-  }
-
-  // the root moved by cents
-  move(from, cents) {
-    W.site_set(T.DRONES, D.ROOT, 0, from * Math.pow(2, cents / 1200));
-    this.update(true);
-  }
-
-  bind() {
-    const e = this.el;
-    let drag = null;
-    e.addEventListener("pointerdown", (ev) => {
-      if (ev.button !== 0 || this.editing) return;
-      wake();
-      e.focus({ preventScroll: true });
-      capture(e, ev.pointerId);
-      drag = { x: ev.clientX, y: ev.clientY, hz: this.hz(), moved: false };
-      ev.preventDefault();
-    });
-    e.addEventListener("pointermove", (ev) => {
-      if (!drag) return;
-      const d = (ev.clientX - drag.x) - (ev.clientY - drag.y);
-      if (!drag.moved) {
-        if (Math.abs(d) < 2) return;
-        drag.moved = true;
-        pushUndo("fine");
-      }
-      this.move(drag.hz, d * (ev.shiftKey ? 0.01 : 0.1));
-    });
-    const end = () => { drag = null; };
-    e.addEventListener("pointerup", end);
-    e.addEventListener("pointercancel", end);
-    e.addEventListener("dblclick", () => this.edit());
-    e.addEventListener("keydown", (ev) => {
-      if (this.editing) return;
-      let dir = 0;
-      if (ev.key === "ArrowUp" || ev.key === "ArrowRight") dir = 1;
-      else if (ev.key === "ArrowDown" || ev.key === "ArrowLeft") dir = -1;
-      else if (ev.key === "Enter") { ev.preventDefault(); this.edit(); return; }
-      else if (ev.key === "Delete" || ev.key === "Backspace") {
-        ev.preventDefault();
-        pushUndo();
-        W.site_root_snap();
-        this.update(true);
-        return;
-      }
-      if (!dir) return;
-      ev.preventDefault();
-      pushUndo("fine");
-      this.move(this.hz(), dir * (ev.shiftKey ? 1 : 0.1));
-    });
-  }
-
-  // type cents from the note: 12.5, -3, +0.4 ct
-  edit() {
-    if (this.editing) return;
-    const input = this.editing = el("input");
-    input.type = "text";
-    input.value = (this.shown || "").replace("−", "-").replace(" ¢", "");
-    input.setAttribute("aria-label", "Cents from the note: type a value");
-    this.el.appendChild(input);
-    input.select();
-    const done = (keep) => {
-      if (!this.editing) return;
-      this.editing = null;
-      const c = keep ? parseFloat(input.value.replace("−", "-").replace(",", ".")) : NaN;
-      input.remove();
-      this.txt.textContent = this.shown;
-      if (Number.isFinite(c)) {
-        pushUndo();
-        const hz = this.hz();
-        this.move(hz, clamp(c, -50, 50) - this.cents(hz));
-      }
-      this.update(true);
-      this.el.focus({ preventScroll: true });
-    };
-    input.addEventListener("keydown", (ev) => {
-      ev.stopPropagation();
-      if (ev.key === "Enter") done(true);
-      else if (ev.key === "Escape") done(false);
-    });
-    input.addEventListener("blur", () => done(true));
-    input.addEventListener("pointerdown", (ev) => ev.stopPropagation());
-  }
+// a drag's speed along its line, px/s: it rises over 60 ms and falls over 25,
+// so slowing down to land on a pitch turns fine at once
+function dragSpeed(drag, step, t) {
+  const dt = Math.max(0.001, (t - drag.t) / 1000), now = Math.abs(step) / dt;
+  drag.t = t;
+  drag.speed += (now - drag.speed) * (1 - Math.exp(-dt / (now > drag.speed ? 0.06 : 0.025)));
+  return drag.speed;
 }
 
 // "Bb3", "c#2", "A4" as Hz (A4 = 440)
@@ -619,8 +514,9 @@ function buildSpace() {
   const box = $("space");
   box.appendChild(el("p", "locked-note", "Looping: the drones keep the loop's settings. Loop again to carry on."));
   const line = box.appendChild(el("div", "root-line"));
-  const rootField = new Field(T.DRONES, D.ROOT, 0, { big: true, label: "Root",
-    title: "The root, in Hz. Drag, or double-click and type 231 or Bb3" });
+  const rootField = new Field(T.DRONES, D.ROOT, 0, { big: true, label: "Root", pitch: true,
+    title: "The root, in Hz. Drag slowly for fine steps (a tenth of a cent), quickly to travel; " +
+      "double-click and type 231 or Bb3" });
   line.appendChild(rootField.el);
   const note = line.appendChild(el("div", "root-note"));
   piano.note = note.appendChild(el("b"));
@@ -628,11 +524,6 @@ function buildSpace() {
   snap.type = "button";
   snap.title = "Move the root to the nearest equal-tempered note";
   snap.addEventListener("click", () => { pushUndo(); W.site_root_snap(); refreshAll(); });
-  const fine = box.appendChild(el("div", "fine-line"));
-  const fineLab = fine.appendChild(el("label", null, "Fine tune"));
-  const fineField = new Fine();
-  fine.appendChild(fineField.el);
-  fineLab.addEventListener("click", () => fineField.el.focus());
 
   const keys = box.appendChild(el("div", "piano"));
   keys.setAttribute("role", "group");
@@ -865,7 +756,7 @@ const sky = {
     if (b < 0) return;
     choose(b);
     capture(this.canvas, e.pointerId);
-    this.drag = { b, y: e.clientY, total: 0, acc: 0, moved: false };
+    this.drag = { b, y: e.clientY, total: 0, acc: 0, moved: false, t: e.timeStamp, speed: 0 };
   },
 
   move(e) {
@@ -883,8 +774,9 @@ const sky = {
       d.moved = true;
       pushUndo(`sky.${d.b}`);
     }
-    if (d.b < ARP0) {                          // a drone's speed, the sun's root: cents a pixel
-      W.site_bend(d.b, -dy * (d.b ? (e.shiftKey ? 0.25 : 2.5) : (e.shiftKey ? 0.1 : 1)));
+    if (d.b < ARP0) {                          // a drone's speed, the sun's root (as fast as it is dragged): cents a pixel
+      const rate = d.b ? 2.5 : pitchRate(dragSpeed(d, dy, e.timeStamp));
+      W.site_bend(d.b, -dy * rate / (e.shiftKey ? 10 : 1));
       note(d.b ? `Planet ${d.b}  ${text(T.DRONES, D.SPEED, d.b)}  ${W.site_freq(d.b).toFixed(2)} Hz`
                : `Root ${text(T.DRONES, D.ROOT, 0)}  ${text(T.DRONES, D.NOTE, 0)}`);
     } else {                                   // an arp planet's note length, a step per 24 px
@@ -1075,13 +967,8 @@ function refresh() {
       tone.v = t;
       tone.menu.value = String(t);
     }
-    const midi = 69 + 12 * Math.log2(get(T.DRONES, D.ROOT, 0) / 440), near = Math.round(midi);
-    piano.note.textContent = text(T.DRONES, D.NOTE, 0).split(" ")[0];
-    for (const { k, midi: m } of piano.keys) {
-      k.classList.toggle("on", m === near && Math.abs(midi - near) < 0.005);
-      k.classList.toggle("near", m === near && Math.abs(midi - near) >= 0.005);
-    }
   }
+  showRoot();
 
   // levels, as dB from -48
   const meter = $("meter").children;
@@ -1092,6 +979,21 @@ function refresh() {
   if (info[16] > lastToast + 1e-3) toast(cstr(W.site_toast()));
   lastToast = info[16];
   recorder.tick();
+}
+
+// the note nearest the root and how far off it, to a tenth of a cent, and
+// its key on the piano
+function showRoot() {
+  const hz = get(T.DRONES, D.ROOT, 0);
+  if (hz === piano.hz) return;
+  piano.hz = hz;
+  const midi = 69 + 12 * Math.log2(hz / 440), near = Math.round(midi), c = 100 * (midi - near);
+  const off = Math.abs(c) >= 0.05;
+  piano.note.textContent = off ? `${noteName(near)} ${c > 0 ? "+" : "−"}${Math.abs(c).toFixed(1)} ¢` : noteName(near);
+  for (const { k, midi: m } of piano.keys) {
+    k.classList.toggle("on", m === near && !off);
+    k.classList.toggle("near", m === near && off);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1610,23 +1512,29 @@ async function selftest() {
     root.editing.value = "A2";
     root.editing.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     out.typedRoot = [text(T.DRONES, D.ROOT, 0), text(T.DRONES, D.NOTE, 0)];
-    const cents = (hz) => 1200 * Math.log2(hz / get(T.DRONES, D.ROOT, 0));
-    const hz0 = get(T.DRONES, D.ROOT, 0);
-    drag(root.el, 40, 0);
-    out.rootDrag = `${(-cents(hz0)).toFixed(1)} ct for 40 px`;
+    // the root: a slow drag tunes, a quick one travels (moves timed as a hand's)
+    const timedDrag = async (target, px, steps, ms) => {
+      const r = target.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      pointer(target, "pointerdown", x, y);
+      for (let i = 1; i <= steps; i++) {
+        await wait(ms);
+        pointer(target, "pointermove", x + (px * i) / steps, y);
+      }
+      pointer(target, "pointerup", x + px, y);
+    };
+    const cents = (from) => 1200 * Math.log2(get(T.DRONES, D.ROOT, 0) / from);
+    let from = get(T.DRONES, D.ROOT, 0);
+    await timedDrag(root.el, 60, 30, 33);
+    await wait(100);
+    out.rootSlow = [`${cents(from).toFixed(2)} ct for 60 px at 60 px/s`, $("space").querySelector(".root-note b").textContent];
+    from = get(T.DRONES, D.ROOT, 0);
+    await timedDrag(root.el, 120, 8, 16);
+    out.rootQuick = `${cents(from).toFixed(0)} ct for 120 px at 940 px/s`;
+    from = get(T.DRONES, D.ROOT, 0);
+    await timedDrag(root.el, -120, 8, 16);
+    await timedDrag(root.el, -20, 20, 50);
+    out.rootBackAndLand = `${cents(from).toFixed(1)} ct after a quick 120 px back and a slow 20`;
     W.site_root_snap();
-    const fine = fields.find((f) => f instanceof Fine), hz1 = get(T.DRONES, D.ROOT, 0);
-    drag(fine.el, 50, 0);
-    out.fineDrag = [`${(-cents(hz1)).toFixed(2)} ct for 50 px`, fine.txt.textContent];
-    fine.el.focus();
-    fine.el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
-    out.fineKey = fine.txt.textContent;
-    fine.edit();
-    fine.editing.value = "-12.5";
-    fine.editing.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    out.fineTyped = [fine.txt.textContent, text(T.DRONES, D.ROOT, 0), $("space").querySelector(".root-note b").textContent];
-    fine.el.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
-    out.fineDelete = [fine.txt.textContent, text(T.DRONES, D.ROOT, 0)];
     const send = fields.find((f) => f.t === T.DRONES && f.r === D.SENDS + 2 && f.b === 2);
     drag(send.el, -60, 0);
     out.reverbSend = [send.txt.textContent, get(T.DRONES, D.SENDS + 2, 2).toFixed(3), document.querySelectorAll(".matrix .vf.dim").length];
