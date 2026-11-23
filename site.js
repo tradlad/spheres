@@ -8,11 +8,13 @@
 const T = { DRONES: 0, ARPS: 1, SOUND: 2, LOOP: 3 };
 const SF = { LOG: 1, CLAMP: 2, SOUND: 4, RETRIG: 8, NOTE: 16, LOOP: 32, COUNTER: 64 };
 const D = { ON: 0, VOICE: 1, LEVEL: 2, PRESSURE: 3, SPEED: 4, OCTAVE: 5, ORBIT: 6, MOONS: 7, MOON_BEAT: 8,
-  ROOT: 9, NOTE: 10, ORBIT_TIME: 11, GRAVITY: 12, WANDER: 13, COMETS: 14 };
+  ROOT: 9, NOTE: 10, ORBIT_TIME: 11, GRAVITY: 12, WANDER: 13, COMETS: 14, SENDS: 15 };
 const A = { ON: 0, INSTRUMENT: 1, LEVEL: 2, OCTAVE: 3, SCALE: 4, NOTES: 5, RANGE: 6, PATTERN: 7, STEPS: 8,
   LENGTH: 9, METER: 10, CLICK: 11, RETRIG: 12, RETRIG_CHANCE: 13, FROM: 14, CHANCE: 15, MUTATE: 16,
-  EVERY: 17, CHORDS: 18, TEMPO: 19, SWING: 20, ACCENT: 21 };
-const S = { FILTER_D: 6, CUTOFF_D: 7, RES_D: 8, FILTER_N: 21, CUTOFF_N: 22, RES_N: 23 };
+  EVERY: 17, CHORDS: 18, TEMPO: 19, SWING: 20, ACCENT: 21, SENDS: 22 };
+const S = { FILTER_D: 6, CUTOFF_D: 7, RES_D: 8, DMIX_D: 11, RMIX_D: 12,
+  FILTER_N: 21, CUTOFF_N: 22, RES_N: 23, DMIX_N: 26, RMIX_N: 27 };
+const GROUP = { DRONES: 0, ARPS: 1 };
 const LP = { LOOP: 0, BARS: 1, COUNT: 2 };
 const LOOP = { OFF: 0, REC: 1, PLAY: 2 };
 const ARP0 = 4, BODIES = 7, TAU = 2 * Math.PI;
@@ -153,10 +155,12 @@ class Field {
     return m.min + p * (m.max - m.min);
   }
 
-  // pixels of drag for the whole range: speeds and the root an octave per 200
+  // pixels of drag for the whole range: speeds an octave per 200, the root
+  // per 600 (2 cents a pixel; Fine below goes finer)
   span() {
     const m = this.m;
-    if ((this.t === T.DRONES && (this.r === D.SPEED || this.r === D.ROOT))) return 200 * Math.log2(m.max / m.min);
+    if (this.t === T.DRONES && this.r === D.ROOT) return 600 * Math.log2(m.max / m.min);
+    if (this.t === T.DRONES && this.r === D.SPEED) return 200 * Math.log2(m.max / m.min);
     return this.opt.knob ? 240 : 320;
   }
 
@@ -285,6 +289,134 @@ class Field {
     const x = parseFloat(s.replace(",", "."));
     if (!Number.isFinite(x)) return null;
     return x / (this.m.scale || 1);
+  }
+}
+
+// the root, finely: shown as cents from the nearest equal-tempered note
+// (A4 = 440), dragged a tenth of a cent a pixel (Shift: a hundredth)
+class Fine {
+  constructor() {
+    Object.assign(this, { v: NaN, shown: null, editing: null });
+    const e = this.el = el("div", "vf fine");
+    e.setAttribute("role", "slider");
+    e.tabIndex = 0;
+    e.setAttribute("aria-label", "Root, fine: cents from the nearest note");
+    e.setAttribute("aria-valuemin", "-50");
+    e.setAttribute("aria-valuemax", "50");
+    e.title = "The root, finely: drag a tenth of a cent a pixel (Shift: a hundredth) · arrow keys a tenth (Shift: a cent) · " +
+      "double-click to type cents · Delete: onto the note";
+    e.appendChild(el("span", "mid"));
+    this.fill = e.appendChild(el("span", "fill"));
+    this.txt = e.appendChild(el("span", "txt"));
+    this.bind();
+    fields.push(this);
+  }
+
+  hz() { return get(T.DRONES, D.ROOT, 0); }
+
+  // cents from the nearest note
+  cents(hz) {
+    const m = 69 + 12 * Math.log2(hz / 440);
+    return 100 * (m - Math.round(m));
+  }
+
+  update(force) {
+    const hz = this.hz();
+    if (hz === this.v && !force) return;
+    this.v = hz;
+    const c = this.cents(hz), s = `${c < -0.05 ? "−" : "+"}${Math.abs(c).toFixed(1)} ¢`;
+    if (s !== this.shown) {
+      this.shown = s;
+      if (!this.editing) this.txt.textContent = s;
+      this.el.setAttribute("aria-valuenow", c.toFixed(1));
+      this.el.setAttribute("aria-valuetext", `${s} from ${text(T.DRONES, D.NOTE, 0).split(" ")[0]}`);
+    }
+    const w = clamp(Math.abs(c) / 50, 0, 1) * 50;
+    this.fill.style.left = `${(c < 0 ? 50 - w : 50).toFixed(2)}%`;
+    this.fill.style.width = `${w.toFixed(2)}%`;
+  }
+
+  // the root moved by cents
+  move(from, cents) {
+    W.site_set(T.DRONES, D.ROOT, 0, from * Math.pow(2, cents / 1200));
+    this.update(true);
+  }
+
+  bind() {
+    const e = this.el;
+    let drag = null;
+    e.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 || this.editing) return;
+      wake();
+      e.focus({ preventScroll: true });
+      capture(e, ev.pointerId);
+      drag = { x: ev.clientX, y: ev.clientY, hz: this.hz(), moved: false };
+      ev.preventDefault();
+    });
+    e.addEventListener("pointermove", (ev) => {
+      if (!drag) return;
+      const d = (ev.clientX - drag.x) - (ev.clientY - drag.y);
+      if (!drag.moved) {
+        if (Math.abs(d) < 2) return;
+        drag.moved = true;
+        pushUndo("fine");
+      }
+      this.move(drag.hz, d * (ev.shiftKey ? 0.01 : 0.1));
+    });
+    const end = () => { drag = null; };
+    e.addEventListener("pointerup", end);
+    e.addEventListener("pointercancel", end);
+    e.addEventListener("dblclick", () => this.edit());
+    e.addEventListener("keydown", (ev) => {
+      if (this.editing) return;
+      let dir = 0;
+      if (ev.key === "ArrowUp" || ev.key === "ArrowRight") dir = 1;
+      else if (ev.key === "ArrowDown" || ev.key === "ArrowLeft") dir = -1;
+      else if (ev.key === "Enter") { ev.preventDefault(); this.edit(); return; }
+      else if (ev.key === "Delete" || ev.key === "Backspace") {
+        ev.preventDefault();
+        pushUndo();
+        W.site_root_snap();
+        this.update(true);
+        return;
+      }
+      if (!dir) return;
+      ev.preventDefault();
+      pushUndo("fine");
+      this.move(this.hz(), dir * (ev.shiftKey ? 1 : 0.1));
+    });
+  }
+
+  // type cents from the note: 12.5, -3, +0.4 ct
+  edit() {
+    if (this.editing) return;
+    const input = this.editing = el("input");
+    input.type = "text";
+    input.value = (this.shown || "").replace("−", "-").replace(" ¢", "");
+    input.setAttribute("aria-label", "Cents from the note: type a value");
+    this.el.appendChild(input);
+    input.select();
+    const done = (keep) => {
+      if (!this.editing) return;
+      this.editing = null;
+      const c = keep ? parseFloat(input.value.replace("−", "-").replace(",", ".")) : NaN;
+      input.remove();
+      this.txt.textContent = this.shown;
+      if (Number.isFinite(c)) {
+        pushUndo();
+        const hz = this.hz();
+        this.move(hz, clamp(c, -50, 50) - this.cents(hz));
+      }
+      this.update(true);
+      this.el.focus({ preventScroll: true });
+    };
+    input.addEventListener("keydown", (ev) => {
+      ev.stopPropagation();
+      if (ev.key === "Enter") done(true);
+      else if (ev.key === "Escape") done(false);
+    });
+    input.addEventListener("blur", () => done(true));
+    input.addEventListener("pointerdown", (ev) => ev.stopPropagation());
   }
 }
 
@@ -433,6 +565,8 @@ function matrix(box, t, bodies, rows, heads) {
     const m = meta(t, r);
     const lab = box.appendChild(el("div", "lab"));
     lab.appendChild(el("span", null, m.name.replace(" (shared)", "")));
+    const send = sendRow(t, r);
+    if (send) lab.title = send.title;
     if (t === T.ARPS && (r === A.SCALE || r === A.METER)) {
       const all = lab.appendChild(el("button", "mini", "all"));
       all.type = "button";
@@ -448,10 +582,27 @@ function matrix(box, t, bodies, rows, heads) {
       cell.dataset.b = b;
       if (r === 0) cell.appendChild(new Toggle(b).el);
       else if (m.list) cell.appendChild(new Choice(t, r, b, { label: `${bodyName(b)} ${m.name}`, grouped: r === A.SCALE && t === T.ARPS }).el);
-      else cell.appendChild(new Field(t, r, b, { label: `${bodyName(b)} ${m.name}`, readonly: t === T.DRONES && r === D.SPEED && b === 0 }).el);
-      if (t === T.ARPS && r === A.CLICK) cell.classList.add("free");
+      else {
+        const f = new Field(t, r, b, { label: `${bodyName(b)} ${m.name}${send ? " send" : ""}`, readonly: t === T.DRONES && r === D.SPEED && b === 0 });
+        cell.appendChild(f.el);
+        if (send) dims.push({ k: f, row: send.row, sendRow: true });
+      }
+      if ((t === T.ARPS && r === A.CLICK) || send) cell.classList.add("free");
     }
   }
+}
+
+// a send row: what it feeds, and the Sound row that silences it at 0
+// (the filter's type, the delay's mix, the reverb's mix)
+function sendRow(t, r) {
+  const k = r - (t === T.DRONES ? D.SENDS : t === T.ARPS ? A.SENDS : NaN);
+  if (!(k >= 0 && k < 3)) return null;
+  const d = t === T.DRONES, who = d ? "drone" : "arp planet", fx = d ? "Drone effects" : "Note effects";
+  return [
+    { row: d ? S.FILTER_D : S.FILTER_N, title: `How much of each ${who} goes through the filter in Sound › ${fx}; the rest goes round it` },
+    { row: d ? S.DMIX_D : S.DMIX_N, title: `How much of each ${who} goes to the delay in Sound › ${fx} (its Delay mix sets how loud the echoes are)` },
+    { row: d ? S.RMIX_D : S.RMIX_N, title: `How much of each ${who} goes to the reverb in Sound › ${fx} (its Reverb mix sets how much of it you hear)` },
+  ][k];
 }
 
 function headsOf(t) {
@@ -477,6 +628,11 @@ function buildSpace() {
   snap.type = "button";
   snap.title = "Move the root to the nearest equal-tempered note";
   snap.addEventListener("click", () => { pushUndo(); W.site_root_snap(); refreshAll(); });
+  const fine = box.appendChild(el("div", "fine-line"));
+  const fineLab = fine.appendChild(el("label", null, "Fine tune"));
+  const fineField = new Fine();
+  fine.appendChild(fineField.el);
+  fineLab.addEventListener("click", () => fineField.el.focus());
 
   const keys = box.appendChild(el("div", "piano"));
   keys.setAttribute("role", "group");
@@ -507,7 +663,7 @@ function buildSpace() {
     });
     piano.keys.push({ k, midi, black });
   }
-  box.appendChild(el("p", "hint", "Click a key for the root on that note; everything above it stays in just intervals."));
+  box.appendChild(el("p", "hint", "Click a key to put the root on that note."));
   const rows = box.appendChild(el("div", "rows"));
   for (const r of [D.ORBIT_TIME, D.GRAVITY, D.WANDER, D.COMETS]) {
     const f = new Field(T.DRONES, r, 0);
@@ -520,14 +676,14 @@ function buildSpace() {
 function buildDrones() {
   buildSpace();
   const box = $("droneMatrix");
-  box.parentElement.insertBefore(el("p", "locked-note", "Looping: these play as the loop has them. Loop again to carry on."), box);
-  matrix(box, T.DRONES, [0, 1, 2, 3], [0, 1, 2, 3, 4, 5, 6, 7, 8], headsOf(T.DRONES));
+  box.parentElement.insertBefore(el("p", "locked-note", "Looping: these play as the loop has them, but for the sends. Loop again to carry on."), box);
+  matrix(box, T.DRONES, [0, 1, 2, 3], [0, 1, 2, 3, D.SENDS, D.SENDS + 1, D.SENDS + 2, 4, 5, 6, 7, 8], headsOf(T.DRONES));
 }
 
 function buildArps() {
   const box = $("arpMatrix");
-  box.parentElement.insertBefore(el("p", "locked-note", "Looping: these play as the loop has them, but for the metronomes."), box);
-  const rows = [...Array(A.TEMPO).keys()];
+  box.parentElement.insertBefore(el("p", "locked-note", "Looping: these play as the loop has them, but for the metronomes and the sends."), box);
+  const rows = [0, 1, 2, 3, A.SENDS, A.SENDS + 1, A.SENDS + 2, ...[...Array(A.TEMPO).keys()].slice(4)];
   matrix(box, T.ARPS, [4, 5, 6], rows, headsOf(T.ARPS));
 }
 
@@ -564,8 +720,8 @@ function buildRack() {
     for (const r of g.rows) {
       const k = new Field(T.SOUND, r, 0, { knob: true, label: meta(T.SOUND, r).name.replace(" (shared)", "") });
       knobs.appendChild(k.el);
-      if (r === S.CUTOFF_D || r === S.RES_D) dims.push({ k, filter: S.FILTER_D });
-      if (r === S.CUTOFF_N || r === S.RES_N) dims.push({ k, filter: S.FILTER_N });
+      if (r === S.CUTOFF_D || r === S.RES_D) dims.push({ k, row: S.FILTER_D });
+      if (r === S.CUTOFF_N || r === S.RES_N) dims.push({ k, row: S.FILTER_N });
     }
   }
 }
@@ -728,7 +884,7 @@ const sky = {
       pushUndo(`sky.${d.b}`);
     }
     if (d.b < ARP0) {                          // a drone's speed, the sun's root: cents a pixel
-      W.site_bend(d.b, -dy * (e.shiftKey ? 0.25 : 2.5));
+      W.site_bend(d.b, -dy * (d.b ? (e.shiftKey ? 0.25 : 2.5) : (e.shiftKey ? 0.1 : 1)));
       note(d.b ? `Planet ${d.b}  ${text(T.DRONES, D.SPEED, d.b)}  ${W.site_freq(d.b).toFixed(2)} Hz`
                : `Root ${text(T.DRONES, D.ROOT, 0)}  ${text(T.DRONES, D.NOTE, 0)}`);
     } else {                                   // an arp planet's note length, a step per 24 px
@@ -768,7 +924,7 @@ function renderInspector() {
   try { j = JSON.parse(raw); } catch { return; }
   const box = $("inspector");
   const ln = (t, cls = "") => `<div class="ln ${cls}">${esc(t)}</div>`;
-  const title = `<div class="ti"><b>${esc(j.title)}</b><span>${esc(j.on ? (j.voice || j.sound) : "off")}</span></div>`;
+  const title = `<div class="ti"><b>${esc(j.title)}</b><span>${esc(j.on ? (j.stopped ? "stopped" : j.voice || j.sound) : "off")}</span></div>`;
   let a, b;
   if (j.kind === "drone") {
     a = title + `<div class="big">${esc(j.hz)}<small>Hz</small></div>` + ln(j.line) +
@@ -826,7 +982,7 @@ function loopWords() {
     return { sub: come, text: `Recording: ${come}, then bars ${first}–${last} play again and again, every note and move the same.` };
   }
   if (mode === LOOP.PLAY) {
-    return { sub: `bar ${bar - first + 1} of ${bars}`, text: `Looping bars ${first}–${last}. Only the Sound settings change now; Loop again to carry on from here.` };
+    return { sub: `bar ${bar - first + 1} of ${bars}`, text: `Looping bars ${first}–${last}. Only the sound changes now (Sound, the sends, Stop all); Loop again to carry on from here.` };
   }
   return { sub: `${n} + ${n} bars`, text: `Loop takes the ${n} bar${n === 1 ? "" : "s"} up to now and the ${n} to come, and plays those ${2 * n} bars again and again.` };
 }
@@ -900,7 +1056,8 @@ function refresh() {
   for (const c of choices) c.update(slow);
   for (const c of toggles) c.update(slow);
   for (const c of segs) c.update(slow);
-  for (const { k, filter } of dims) k.el.classList.toggle("dim", get(T.SOUND, filter, 0) < 0.5);
+  for (const { k, row } of dims) k.el.classList.toggle("dim", get(T.SOUND, row, 0) < (row === S.FILTER_D || row === S.FILTER_N ? 0.5 : 0.005));
+  showGroups();
   renderBar();
   renderLoop();
   if (frameNo % 6 === 0) renderInspector();
@@ -919,7 +1076,7 @@ function refresh() {
       tone.menu.value = String(t);
     }
     const midi = 69 + 12 * Math.log2(get(T.DRONES, D.ROOT, 0) / 440), near = Math.round(midi);
-    piano.note.textContent = text(T.DRONES, D.NOTE, 0);
+    piano.note.textContent = text(T.DRONES, D.NOTE, 0).split(" ")[0];
     for (const { k, midi: m } of piano.keys) {
       k.classList.toggle("on", m === near && Math.abs(midi - near) < 0.005);
       k.classList.toggle("near", m === near && Math.abs(midi - near) >= 0.005);
@@ -1220,6 +1377,8 @@ function bindKeys() {
     } else if (e.key === "l" || e.key === "L") { wake(); W.site_loop(); }
     else if (e.key === "c" || e.key === "C") { wake(); W.site_comet(); }
     else if (e.key === "h" || e.key === "H") W.site_hold();
+    else if (e.key === "d" || e.key === "D") group(GROUP.DRONES);
+    else if (e.key === "a" || e.key === "A") group(GROUP.ARPS);
     else if (e.key === "?") $("about").showModal();
     else if (/^[0-6]$/.test(e.key)) choose(+e.key);
   });
@@ -1290,6 +1449,25 @@ function play() {
   W.site_play();
 }
 
+// Stop all, Start all: the drones (D) or the arps (A); each keeps its On
+const groups = [{ id: "dronesAll", name: "drones", on: NaN }, { id: "arpsAll", name: "arps", on: NaN }];
+function group(g) {
+  wake();
+  W.site_group(g);
+}
+
+function showGroups() {
+  groups.forEach((gr, g) => {
+    const on = info[26 + g] >= 0.5;
+    if (on === gr.on) return;
+    gr.on = on;
+    const b = $(gr.id);
+    b.closest(".module").classList.toggle("stopped", !on);
+    b.querySelector(".sa-word").textContent = on ? "Stop all" : "Start all";
+    b.setAttribute("aria-label", `${on ? "Stop" : "Start"} all the ${gr.name}`);
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* start                                                               */
 
@@ -1332,6 +1510,7 @@ async function main() {
   for (const id of ["loopTop", "loopBig"]) $(id).addEventListener("click", () => { wake(); W.site_loop(); });
   $("comet").addEventListener("click", () => { wake(); W.site_comet(); });
   $("hold").addEventListener("click", () => W.site_hold());
+  groups.forEach((gr, g) => $(gr.id).addEventListener("click", () => group(g)));
   $("undo").addEventListener("click", undo);
   $("redo").addEventListener("click", redo);
   $("record").addEventListener("click", () => recorder.toggle());
@@ -1369,6 +1548,7 @@ async function main() {
   const show = new URLSearchParams(location.search).get("show");      // for screenshots of the menus
   if (show === "file") $("fileBtn").click();
   else if (show === "save") openSave();
+  else if (show === "stopped") { W.site_group(GROUP.DRONES); W.site_group(GROUP.ARPS); }
   if (SELFTEST) selftest();
 }
 
@@ -1430,6 +1610,36 @@ async function selftest() {
     root.editing.value = "A2";
     root.editing.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     out.typedRoot = [text(T.DRONES, D.ROOT, 0), text(T.DRONES, D.NOTE, 0)];
+    const cents = (hz) => 1200 * Math.log2(hz / get(T.DRONES, D.ROOT, 0));
+    const hz0 = get(T.DRONES, D.ROOT, 0);
+    drag(root.el, 40, 0);
+    out.rootDrag = `${(-cents(hz0)).toFixed(1)} ct for 40 px`;
+    W.site_root_snap();
+    const fine = fields.find((f) => f instanceof Fine), hz1 = get(T.DRONES, D.ROOT, 0);
+    drag(fine.el, 50, 0);
+    out.fineDrag = [`${(-cents(hz1)).toFixed(2)} ct for 50 px`, fine.txt.textContent];
+    fine.el.focus();
+    fine.el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    out.fineKey = fine.txt.textContent;
+    fine.edit();
+    fine.editing.value = "-12.5";
+    fine.editing.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    out.fineTyped = [fine.txt.textContent, text(T.DRONES, D.ROOT, 0), $("space").querySelector(".root-note b").textContent];
+    fine.el.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    out.fineDelete = [fine.txt.textContent, text(T.DRONES, D.ROOT, 0)];
+    const send = fields.find((f) => f.t === T.DRONES && f.r === D.SENDS + 2 && f.b === 2);
+    drag(send.el, -60, 0);
+    out.reverbSend = [send.txt.textContent, get(T.DRONES, D.SENDS + 2, 2).toFixed(3), document.querySelectorAll(".matrix .vf.dim").length];
+    $("dronesAll").click();
+    await wait(50);
+    out.dronesStopped = [info[26], $("dronesAll").textContent.replace(/\s+/g, " ").trim(), $("droneMatrix").closest(".module").classList.contains("stopped")];
+    dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+    await wait(50);
+    out.arpsByKey = [info[27], $("arpsAll").querySelector(".sa-word").textContent];
+    $("dronesAll").click();
+    dispatchEvent(new KeyboardEvent("keydown", { key: "A", bubbles: true }));
+    await wait(50);
+    out.bothBack = [info[26], info[27]];
     const p = f32(W.site_bodies(), BODIES * 4), r = sky.canvas.getBoundingClientRect();
     const at = (b) => [r.left + r.width / 2 + (p[4 * b] - sky.cx) * sky.k, r.top + r.height / 2 + (p[4 * b + 1] - sky.cy) * sky.k];
     const [x5, y5] = at(5);

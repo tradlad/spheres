@@ -99,7 +99,13 @@
       </div>
     </div>
     <div class="module grow">
-      <div class="head"><h2>Drones</h2><p>the sun and planets 1–3</p></div>
+      <div class="head"><h2>Drones</h2><p>the sun and planets 1–3</p>
+        <button id="dronesAll" class="tool stop-all" type="button" title="Stop every drone at once; press again and each comes back as it was (D)">
+          <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          <span class="sa-word">Stop all</span><kbd>D</kbd>
+        </button>
+      </div>
       <div id="droneMatrix" class="matrix"></div>
     </div>
   </section>
@@ -133,7 +139,13 @@
 
   <section class="pane arps" aria-label="The arps">
     <div class="module grow">
-      <div class="head"><h2>Arps</h2><p>planets 4–6, side by side</p></div>
+      <div class="head"><h2>Arps</h2><p>planets 4–6, side by side</p>
+        <button id="arpsAll" class="tool stop-all" type="button" title="Stop every arp planet at once; they play on unheard, and come back in step (A)">
+          <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          <span class="sa-word">Stop all</span><kbd>A</kbd>
+        </button>
+      </div>
       <div id="arpMatrix" class="matrix"></div>
     </div>
   </section>
@@ -172,8 +184,9 @@
   <h3>How it works</h3>
   <p><b>The drones.</b> A droning planet's speed is its pitch. One set at 3:2 sounds a fifth above the sun, and circles three times while the sun's beam turns twice. Simple ratios like 3:2, 4:3 and 5:4 sound smooth and still. Gravity pulls the drones towards them; wander and comets push them away again, so the harmony breathes. The panel under the sky shows how each drone sits with the others: locked, gently beating, or rough.</p>
   <p><b>The arps.</b> Planets 4, 5 and 6 each play an arpeggio from a scale, in a meter of their own. Their notes sit round their circle and light up as they sound. Each can start over every few bars or with another planet, skip notes by chance, change a few notes as it goes, or move through the scale's chords.</p>
-  <p><b>The looper.</b> Loop takes the bars just played and as many still to come, and plays them again and again, exactly: the same notes, chances and movements, not a recording. While it loops, only the Sound settings change. Press it again to carry on from there.</p>
-  <p><b>The tuning.</b> Everything is tuned in just intervals above one root note. Move the root and the whole system moves with it.</p>
+  <p><b>The looper.</b> Loop takes the bars just played and as many still to come, and plays them again and again, exactly: the same notes, chances and movements, not a recording. While it loops, only the sound changes: the Sound settings, the sends and Stop all. Press it again to carry on from there.</p>
+  <p><b>The tuning.</b> Everything is tuned in just intervals above one root note. Move the root and the whole system moves with it. <b>Fine tune</b>, under the root, moves it a tenth of a cent at a time, for matching another instrument by ear.</p>
+  <p><b>The sound.</b> The drones and the arps each have their own filter, delay and reverb, under Sound. Each drone and arp planet has <b>sends</b>: how much of it goes through the filter (the rest goes round it), and how much goes to the delay and to the reverb. <b>Stop all</b>, at the top of the drones and of the arps, silences a whole side at once; press it again and each comes back as it was, the arps in step, as if they had played on.</p>
 
   <h3>Getting started</h3>
   <ol>
@@ -187,15 +200,15 @@
 
   <h3>Changing values</h3>
   <ul>
-    <li><b>Drag</b> a value: right or up for more. Hold <kbd>Shift</kbd> to go finely.</li>
+    <li><b>Drag</b> a value: right or up for more. Hold <kbd>Shift</kbd> to go finely. The root moves two cents a pixel; <b>Fine tune</b> a tenth of a cent.</li>
     <li><b>Double-click</b> a value to type it: <code>231</code> or <code>Bb3</code> for the root, <code>3:2</code> for a speed.</li>
     <li>With a value chosen, the arrow keys step it (<kbd>Shift</kbd> for big steps), and <kbd>Delete</kbd> puts back the value it started with.</li>
-    <li>On the sky, drag a drone up or down to change its speed. Let go near a simple ratio with the sun and it settles there; hold <kbd>Alt</kbd> to leave it free. Drag the sun to move the root, or an arp planet for shorter or longer notes. Double-click a planet to turn it on or off.</li>
+    <li>On the sky, drag a drone up or down to change its speed. Let go near a simple ratio with the sun and it settles there; hold <kbd>Alt</kbd> to leave it free. Drag the sun to move the root (a cent a pixel), or an arp planet for shorter or longer notes. Double-click a planet to turn it on or off.</li>
     <li><kbd>Ctrl Z</kbd> undoes, <kbd>Ctrl Shift Z</kbd> redoes.</li>
   </ul>
 
   <h3>Keys</h3>
-  <p><kbd>Space</kbd> play or stop · <kbd>L</kbd> loop · <kbd>C</kbd> comet · <kbd>H</kbd> hold the tuning · <kbd>0</kbd> to <kbd>6</kbd> choose the sun or a planet · <kbd>Ctrl S</kbd> save · <kbd>Ctrl O</kbd> open · <kbd>?</kbd> this page</p>
+  <p><kbd>Space</kbd> play or stop · <kbd>L</kbd> loop · <kbd>C</kbd> comet · <kbd>H</kbd> hold the tuning · <kbd>D</kbd> stop or start all the drones · <kbd>A</kbd> all the arps · <kbd>0</kbd> to <kbd>6</kbd> choose the sun or a planet · <kbd>Ctrl S</kbd> save · <kbd>Ctrl O</kbd> open · <kbd>?</kbd> this page</p>
 
   <p class="credits">Spheres remembers where you left off in this browser. The fonts in its engine are the Go fonts, under a BSD licence (<a href="LICENSE-fonts.txt">details</a>).</p>
 </dialog>

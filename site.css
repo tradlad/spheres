@@ -231,6 +231,21 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .head h2, .rack-head h2 { margin: 0; font-size: 12px; font-weight: 650; letter-spacing: 0.1em; text-transform: uppercase; }
 .head p, .rack-head p { margin: 0; font-size: 12px; color: var(--faint); }
+.head p { margin-left: auto; }
+
+/* Stop all, Start all: a section's drones or arps */
+.stop-all { align-self: center; height: 28px; padding: 0 8px 0 9px; gap: 6px; border-radius: 8px; font-size: 12px; }
+.stop-all svg { width: 11px; height: 11px; fill: currentColor; stroke: none; }
+.stop-all .i-play { display: none; }
+.stop-all kbd { font-size: 10px; padding: 0 3px; }
+#dronesAll { --sc: var(--drone); }
+#arpsAll { --sc: var(--arp); }
+.stopped .stop-all { background: var(--sc); border-color: var(--sc); color: #0b0e13; font-weight: 650; }
+.stopped .stop-all:hover { background: color-mix(in srgb, var(--sc) 85%, white); }
+.stopped .stop-all .i-play { display: block; }
+.stopped .stop-all .i-stop { display: none; }
+.stopped .stop-all kbd { color: #0b0e13; border-color: rgba(11, 14, 19, 0.35); }
+.module.stopped .matrix .colhead, .module.stopped .matrix .cellx { opacity: 0.45; }
 .locked .matrix .cellx:not(.free), .locked #space .vf, .locked #space .piano, .locked .live { opacity: 0.45; }
 .locked-note { display: none; margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; background: rgba(118, 222, 140, 0.1); color: var(--good); font-size: 12.5px; }
 .locked .locked-note { display: block; }
@@ -346,7 +361,13 @@ select.pick:hover { border-color: var(--line2); }
 .piano .on { background: var(--drone); color: #0b0e13; font-weight: 700; }
 .piano .near { box-shadow: inset 0 -4px 0 var(--drone); }
 .hint { margin: 0 0 12px; font-size: 12px; color: var(--faint); }
-.rows { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: 6px 10px; align-items: center; }
+/* Fine tune: cents from the note, the bar growing from the middle */
+.fine-line { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr); gap: 10px; align-items: center; margin: 0 0 10px; }
+.fine-line > label { font-size: 12.5px; color: var(--dim); }
+.vf.fine { justify-content: center; font: 600 13px var(--mono); }
+.vf.fine .mid { position: absolute; left: 50%; top: 6px; bottom: 6px; width: 1px; background: var(--line2); }
+.vf.fine .fill { height: 3px; }
+.rows { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px 10px; align-items: center; }
 .rows > label { font-size: 12.5px; color: var(--dim); }
 .live { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .live .tool { height: 34px; padding: 0 10px; }
@@ -380,6 +401,7 @@ select.pick:hover { border-color: var(--line2); }
 .colhead .sub { font: 11px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .colhead.sel { background: var(--sel); border-color: var(--c); }
 .cellx { min-width: 0; }
+.matrix .vf.dim { opacity: 0.45; }
 .matrix .vf, .matrix select.pick, .matrix .switch { font-size: 12px; }
 .cellx.sel .vf, .cellx.sel select.pick, .cellx.sel .switch, .cellx.sel .seg button { border-color: color-mix(in srgb, var(--c) 55%, var(--line)); }
 
