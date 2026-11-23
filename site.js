@@ -1,10 +1,9 @@
-// Spheres website. The app (the Brick's own C code as WebAssembly: the
-// site_* exports) runs on this page and owns every setting; the engine runs
-// in an audio worklet. Each frame the page sends the app's snapshot to the
-// engine, hands the engine's state back, draws the sky from the shapes the
-// app records, and refreshes the controls that changed. Controls take their
-// names, ranges, steps and wording from the app's settings tables, so they
-// are the Brick's own.
+// Spheres website. The app (C, as WebAssembly: the site_* exports) runs on
+// this page and owns every setting; the engine runs in an audio worklet.
+// Each frame the page sends the app's snapshot to the engine, hands the
+// engine's state back, draws the sky from the shapes the app records, and
+// refreshes the controls that changed. Controls take their names, ranges,
+// steps and wording from the app's settings tables.
 
 const T = { DRONES: 0, ARPS: 1, SOUND: 2, LOOP: 3 };
 const SF = { LOG: 1, CLAMP: 2, SOUND: 4, RETRIG: 8, NOTE: 16, LOOP: 32, COUNTER: 64 };
@@ -17,7 +16,7 @@ const S = { FILTER_D: 6, CUTOFF_D: 7, RES_D: 8, FILTER_N: 21, CUTOFF_N: 22, RES_
 const LP = { LOOP: 0, BARS: 1, COUNT: 2 };
 const LOOP = { OFF: 0, REC: 1, PLAY: 2 };
 const ARP0 = 4, BODIES = 7, TAU = 2 * Math.PI;
-const SLOTS_KEY = (i) => `spheres.slot${i + 1}`, SESSION_KEY = "spheres.session", VOLUME_KEY = "spheres.volume";
+const SESSION_KEY = "spheres.session", VOLUME_KEY = "spheres.volume";
 const SELFTEST = new URLSearchParams(location.search).has("selftest");
 
 let W, wasmBytes, snapSize;
@@ -569,14 +568,13 @@ function buildRack() {
       if (r === S.CUTOFF_N || r === S.RES_N) dims.push({ k, filter: S.FILTER_N });
     }
   }
-  rack.appendChild(buildSaves());
 }
 
 const tone = { menu: null, v: NaN };
 function toneMenu() {
   const m = tone.menu = el("select", "pick");
   m.setAttribute("aria-label", "Drone tone preset");
-  m.title = "The Brick's tone presets for the drones";
+  m.title = "Tone presets for the drones";
   const custom = m.appendChild(el("option", null, "Custom"));
   custom.value = "-1";
   custom.disabled = true;
@@ -633,7 +631,7 @@ const sky = {
     this.size = r.width;
     this.canvas.width = Math.max(1, Math.round(r.width * this.dpr));
     this.canvas.height = Math.max(1, Math.round(r.height * this.dpr));
-    this.k = r.width / 2 / 335;            // the Brick's sky reaches about 335 px from the sun
+    this.k = r.width / 2 / 335;            // the sky reaches about 335 of its units from the sun
   },
 
   draw() {
@@ -769,26 +767,26 @@ function renderInspector() {
   let j;
   try { j = JSON.parse(raw); } catch { return; }
   const box = $("inspector");
-  const c = j.col;
-  let h = `<div class="ti"><b>${esc(j.title)}</b><span style="--c:${c}">${esc(j.on ? (j.voice || j.sound) : "off")}</span></div>`;
+  const ln = (t, cls = "") => `<div class="ln ${cls}">${esc(t)}</div>`;
+  const title = `<div class="ti"><b>${esc(j.title)}</b><span>${esc(j.on ? (j.voice || j.sound) : "off")}</span></div>`;
+  let a, b;
   if (j.kind === "drone") {
-    h += `<div class="big">${esc(j.hz)}<small>Hz</small></div><div class="ln">${esc(j.line)}</div>`;
-    if (j.pulled) h += `<div class="ln${j.warn ? " warn" : ""}">pulled ${esc(j.pulled)}</div>`;
-    h += `<h3>Pitch ratio with</h3>`;
-    if (j.with.length) {
-      h += `<div class="with">${j.with.map((w) => `<span>${esc(w.with)}</span><span>${esc(w.ratio)}</span><span class="${w.lock ? "ok" : w.near ? "near" : "far"}">${esc(w.state)}</span>`).join("")}</div>`;
-    } else h += `<div class="ln off">no other drone on</div>`;
-    h += `<div class="ln" style="margin-top:8px">orbit ${esc(j.orbit)}</div>`;
+    a = title + `<div class="big">${esc(j.hz)}<small>Hz</small></div>` + ln(j.line) +
+      (j.pulled ? ln(`pulled ${j.pulled}`, j.warn ? "warn" : "") : "") + ln(`orbit ${j.orbit}`);
+    b = `<h3>Pitch ratio with</h3>`;
+    b += j.with.length
+      ? `<div class="with">${j.with.map((w) => `<span>${esc(w.with)}</span><span>${esc(w.ratio)}</span><span class="${w.lock ? "ok" : w.near ? "near" : "far"}">${esc(w.state)}</span>`).join("")}</div>`
+      : `<div class="ln off">no other drone on</div>`;
     const sun = j.with.find((w) => w.with === "sun");
-    if (j.b > 0 && sun && !sun.lock) h += `<button class="tool snap" type="button" data-snap="${j.b}">Onto the simple ratio with the sun</button>`;
+    if (j.b > 0 && sun && !sun.lock) b += `<button class="tool snap" type="button" data-snap="${j.b}">Settle on ${esc(sun.ratio)} with the sun</button>`;
   } else {
-    if (j.note) h += `<div class="big" style="color:${j.notecol}">${esc(j.note)}<small>${esc(j.hz)}</small></div>`;
-    h += `<div class="ln">${esc(j.scale)}</div>`;
-    h += j.lines.filter((l) => l.trim()).map((l) => `<div class="ln">${esc(l)}</div>`).join("");
-    h += `<h3>This pass</h3><div class="pass">${j.pass.map((p, i) => `<span class="${i === j.heard && j.flash > 0 ? "at" : ""}" style="color:${p.c}">${esc(p.t)}</span>`).join("")}</div>`;
+    a = title + (j.note ? `<div class="big" style="color:${j.notecol}">${esc(j.note)}<small>${esc(j.hz)}</small></div>` : "") +
+      ln(j.scale) + ln(j.lines[0]) + ln(j.lines[1]);
+    b = j.lines.slice(2).filter((l) => l.trim()).map((l) => ln(l)).join("") +
+      `<h3 class="next">This pass</h3><div class="pass">${j.pass.map((p, i) => `<span class="${i === j.heard && j.flash > 0 ? "at" : ""}" style="color:${p.c}">${esc(p.t)}</span>`).join("")}</div>`;
   }
-  box.innerHTML = h;
-  box.style.setProperty("--c", c);
+  box.innerHTML = `<div>${a}</div><div>${b}</div>`;
+  box.style.setProperty("--c", j.col);
   const snap = box.querySelector("[data-snap]");
   if (snap) snap.addEventListener("click", () => { pushUndo(); W.site_snap_ratio(+snap.dataset.snap, 0); refreshAll(); });
 }
@@ -848,7 +846,7 @@ function renderLoop() {
   const t = $("loopText");
   if (t.textContent !== words.text) t.textContent = words.text;
 
-  // the loop's bars, as the Brick draws them: kept and to come, the press between
+  // the loop's bars, as the app draws them: kept and to come, the press between
   const on = mode !== LOOP.OFF, has = info[1] >= 0.5 && info[0] >= 0.5, bar = has ? info[2] : 0;
   const n = on ? info[9] : 2 * info[14];
   let first = on ? info[8] : bar - n / 2 + 1;
@@ -868,43 +866,6 @@ function renderLoop() {
     box.appendChild(el("i", cls, String(b)));
   }
 }
-
-const pad = {
-  init() {
-    const e = this.el = $("pad");
-    this.dot = e.querySelector(".pad-dot");
-    let on = false;
-    const set = (ev) => {
-      const r = e.getBoundingClientRect();
-      const x = clamp((ev.clientX - r.left - 8) / (r.width - 16), 0, 1), y = clamp(1 - (ev.clientY - r.top - 8) / (r.height - 16), 0, 1);
-      W.site_set(T.DRONES, D.GRAVITY, 0, Math.round(y * 100) / 100);
-      W.site_set(T.DRONES, D.WANDER, 0, Math.round(x * 300) / 10);
-    };
-    e.addEventListener("pointerdown", (ev) => {
-      wake();
-      capture(e, ev.pointerId);
-      on = true;
-      pushUndo("pad");
-      set(ev);
-    });
-    e.addEventListener("pointermove", (ev) => { if (on) set(ev); });
-    e.addEventListener("pointerup", () => { on = false; });
-    e.addEventListener("pointercancel", () => { on = false; });
-    e.addEventListener("keydown", (ev) => {
-      const k = { ArrowUp: [D.GRAVITY, 1], ArrowDown: [D.GRAVITY, -1], ArrowRight: [D.WANDER, 1], ArrowLeft: [D.WANDER, -1] }[ev.key];
-      if (!k) return;
-      ev.preventDefault();
-      pushUndo("pad");
-      W.site_step(T.DRONES, k[0], 0, k[1], ev.shiftKey ? 1 : 0);
-    });
-  },
-  render() {
-    const g = get(T.DRONES, D.GRAVITY, 0), w = get(T.DRONES, D.WANDER, 0);
-    this.dot.style.left = `calc(8px + ${clamp(w / 30, 0, 1)} * (100% - 16px))`;
-    this.dot.style.top = `calc(8px + ${1 - clamp(g, 0, 1)} * (100% - 16px))`;
-    this.el.setAttribute("aria-valuetext", `gravity ${text(T.DRONES, D.GRAVITY, 0)}, wander ${text(T.DRONES, D.WANDER, 0)}`);
-  },
-};
 
 /* ------------------------------------------------------------------ */
 /* refreshing                                                          */
@@ -942,7 +903,6 @@ function refresh() {
   for (const { k, filter } of dims) k.el.classList.toggle("dim", get(T.SOUND, filter, 0) < 0.5);
   renderBar();
   renderLoop();
-  pad.render();
   if (frameNo % 6 === 0) renderInspector();
 
   if (slow) {
@@ -1110,19 +1070,9 @@ function storageSet(k, v) {
   } catch { /* storage off: it lasts until the page closes */ }
 }
 
-const slotText = (i) => cstr(W.site_slot(i));
-const setSlotText = (i, t) => writeText(W.site_slot(i), W.site_slot_size(), t);
-
-function loadSlots() {
-  for (let i = 0; i < W.site_slot_count(); i++) setSlotText(i, storageGet(SLOTS_KEY(i)) || "");
-  W.site_slots_loaded();
-}
-
-function storeSlots() {
-  const dirty = W.site_slots_dirty();
-  if (!dirty) return;
-  for (let i = 0; dirty >>> i; i++) if ((dirty >>> i) & 1) storageSet(SLOTS_KEY(i), slotText(i));
-  renderSlots();
+function loadText(t) {
+  writeText(W.site_session_buf(), W.site_session_size(), t);
+  return W.site_session_load();
 }
 
 let kept = null;
@@ -1135,132 +1085,58 @@ function keepSession() {
   }
 }
 
-function loadText(t) {
-  writeText(W.site_session_buf(), W.site_session_size(), t);
-  return W.site_session_load();
+// a name for the file: the tempo and the root's note, "spheres-72bpm-D3.txt"
+function fileName() {
+  const bpm = Math.round(get(T.ARPS, A.TEMPO, ARP0));
+  const note = text(T.DRONES, D.NOTE, 0).split(" ")[0].replace("#", "sharp");
+  return `spheres-${bpm}bpm-${note}.txt`;
 }
 
-const slotRows = [];
-function buildSaves() {
-  const mod = el("div", "module saves");
-  mod.style.setProperty("--c", "var(--text)");
-  const head = mod.appendChild(el("div", "mod-head"));
-  head.appendChild(el("h3", null, "Saves"));
-  head.appendChild(el("span", "hint", "kept in this browser"));
-  head.lastChild.style.margin = "0";
-  const list = mod.appendChild(el("div", "slots"));
-  for (let i = 0; i < W.site_slot_count(); i++) {
-    const row = list.appendChild(el("div", "slot"));
-    row.appendChild(el("span", "n", String(i + 1)));
-    const t = row.appendChild(el("button", "t"));
-    t.type = "button";
-    t.title = "Load this slot";
-    t.addEventListener("click", () => { pushUndo(); W.site_slot_load(i); refreshAll(); renderSlots(); });
-    const acts = row.appendChild(el("div", "acts"));
-    const sv = acts.appendChild(el("button", null, "Save"));
-    sv.type = "button";
-    sv.title = "Save the sky now in this slot";
-    let asking = 0;
-    sv.addEventListener("click", () => {
-      const full = !!slotText(i), cur = W.site_current() === i;
-      if (full && !cur && !asking) {
-        sv.textContent = "Replace?";
-        sv.classList.add("ask");
-        asking = setTimeout(() => { asking = 0; sv.textContent = "Save"; sv.classList.remove("ask"); }, 3000);
-        return;
-      }
-      clearTimeout(asking);
-      asking = 0;
-      sv.textContent = "Save";
-      sv.classList.remove("ask");
-      W.site_slot_save(i);
-      storeSlots();
-    });
-    const dl = acts.appendChild(el("button"));
-    dl.type = "button";
-    dl.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>`;
-    dl.setAttribute("aria-label", `Download slot ${i + 1} for the Brick`);
-    dl.title = `Download slot${i + 1}.txt, the Brick's own file`;
-    dl.addEventListener("click", () => save(new Blob([slotText(i)], { type: "text/plain" }), `slot${i + 1}.txt`));
-    slotRows.push({ row, t, dl });
+function cleanName(n) {
+  n = n.trim().replace(/[\\/:*?"<>|]+/g, "-") || fileName();
+  return /\.txt$/i.test(n) ? n : `${n}.txt`;
+}
+
+const saving = { lastBlob: null };
+function openSave() {
+  const d = $("saveDlg"), name = $("saveName");
+  name.value = fileName();
+  $("saveAs").hidden = typeof window.showSaveFilePicker !== "function";
+  d.showModal();
+  name.focus();
+  name.setSelectionRange(0, name.value.length - 4);       // the name, not its .txt
+}
+
+function saveNow(n) {
+  const blob = new Blob([sessionText()], { type: "text/plain" });
+  saving.lastBlob = { name: n, size: blob.size };
+  if (!SELFTEST) save(blob, n);
+  toast(`Saved ${n}`);
+}
+
+async function saveAs(n) {
+  try {
+    const h = await window.showSaveFilePicker({ suggestedName: n, types: [{ description: "Spheres sound", accept: { "text/plain": [".txt"] } }] });
+    const w = await h.createWritable();
+    await w.write(sessionText());
+    await w.close();
+    toast(`Saved ${h.name}`);
+    return true;
+  } catch (err) {
+    if (err && err.name !== "AbortError") toast(`Could not save: ${err.message}`);
+    return false;
   }
-  const tools = mod.appendChild(el("div", "save-tools"));
-  const open = tools.appendChild(el("button", "tool", "Open a file"));
-  open.type = "button";
-  open.title = "Open a save: a slot file from the Brick, or the old page's saves";
-  const file = mod.appendChild(el("input"));
-  file.type = "file";
-  file.accept = ".txt,.json,text/plain,application/json";
-  file.hidden = true;
-  open.addEventListener("click", () => file.click());
-  file.addEventListener("change", () => {
-    if (file.files[0]) openFile(file.files[0]);
-    file.value = "";
-  });
-  const link = tools.appendChild(el("button", "tool", "Copy link"));
-  link.type = "button";
-  link.title = "Copy a link that holds this whole sky";
-  link.addEventListener("click", shareLink);
-  const fresh = tools.appendChild(el("button", "tool", "Starting sky"));
-  fresh.type = "button";
-  fresh.title = "Everything back to how Spheres starts (the slots stay)";
-  let sure = 0;
-  fresh.addEventListener("click", () => {
-    if (!sure) {
-      fresh.textContent = "Sure? Click again";
-      sure = setTimeout(() => { sure = 0; fresh.textContent = "Starting sky"; }, 3000);
-      return;
-    }
-    clearTimeout(sure);
-    sure = 0;
-    fresh.textContent = "Starting sky";
-    pushUndo();
-    W.site_fresh();
-    refreshAll();
-  });
-  mod.appendChild(el("p", "note", "A slot's download is the Brick's own file: copy it to Tools/tg5040/Spheres.pak/saves/ on the card."));
-  return mod;
-}
-
-function renderSlots() {
-  const cur = W.site_current();
-  slotRows.forEach(({ row, t, dl }, i) => {
-    const title = cstr(W.site_slot_title(i));
-    t.textContent = title || "empty";
-    t.disabled = !title;
-    dl.hidden = !title;
-    row.classList.toggle("cur", cur === i && !!title);
-  });
 }
 
 async function openFile(f) {
   const body = await f.text();
-  if (/\.json$/i.test(f.name) || body.trim().startsWith("{")) {
-    try {
-      const d = JSON.parse(body);
-      if (d.app === "spheres" && Array.isArray(d.slots)) {
-        const n = d.slots.filter((s) => s).length;
-        if (!confirm(`Put the ${n} saves from ${f.name} in the slots? Slots they fill are replaced.`)) return;
-        d.slots.forEach((s, i) => {
-          if (i < W.site_slot_count() && typeof s === "string" && s) {
-            setSlotText(i, s);
-            storageSet(SLOTS_KEY(i), s);
-          }
-        });
-        W.site_slots_loaded();
-        renderSlots();
-        toast(`${n} saves from ${f.name} are in the slots`);
-        return;
-      }
-    } catch { /* not JSON: try it as a save below */ }
-  }
   pushUndo();
   if (loadText(body)) {
     refreshAll();
     toast(`Opened ${f.name}`);
   } else {
     hist.past.pop();
-    toast(`${f.name} is not a Spheres save`);
+    toast(`${f.name} is not a Spheres sound`);
   }
 }
 
@@ -1332,9 +1208,11 @@ function bindKeys() {
       const k = e.key.toLowerCase();
       if (k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
       else if (k === "y") { e.preventDefault(); redo(); }
+      else if (k === "s") { e.preventDefault(); openSave(); }
+      else if (k === "o") { e.preventDefault(); $("openFile").click(); }
       return;
     }
-    if (typing || e.altKey || $("help").open) return;
+    if (typing || e.altKey || document.querySelector("dialog[open]")) return;
     if (e.key === " ") {
       if (t.tagName === "BUTTON") return;
       e.preventDefault();
@@ -1342,8 +1220,68 @@ function bindKeys() {
     } else if (e.key === "l" || e.key === "L") { wake(); W.site_loop(); }
     else if (e.key === "c" || e.key === "C") { wake(); W.site_comet(); }
     else if (e.key === "h" || e.key === "H") W.site_hold();
-    else if (e.key === "?") $("help").showModal();
+    else if (e.key === "?") $("about").showModal();
     else if (/^[0-6]$/.test(e.key)) choose(+e.key);
+  });
+}
+
+// the top bar's menus: File (save, open, a link, start over) and About
+function bindMenus() {
+  const btn = $("fileBtn"), list = $("fileMenu"), items = [...list.querySelectorAll("[role=menuitem]")];
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+  for (const k of list.querySelectorAll("kbd[data-keys]")) k.textContent = `${mac ? "⌘" : "Ctrl "}${k.dataset.keys}`;
+  const close = (focus) => {
+    list.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    if (focus) btn.focus();
+  };
+  const open = (at) => {
+    list.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    items[at || 0].focus();
+  };
+  btn.addEventListener("click", () => (list.hidden ? open(0) : close()));
+  btn.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); open(0); }
+  });
+  list.addEventListener("keydown", (e) => {
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); close(true); }
+    else if (e.key === "Tab") close();
+  });
+  addEventListener("pointerdown", (e) => { if (!list.hidden && !e.target.closest(".menu")) close(); });
+  list.addEventListener("click", (e) => {
+    const act = e.target.closest("[data-act]")?.dataset.act;
+    if (!act) return;
+    close();
+    if (act === "save") openSave();
+    else if (act === "open") $("openFile").click();
+    else if (act === "link") shareLink();
+    else if (act === "fresh") {
+      pushUndo();
+      W.site_fresh();
+      refreshAll();
+      toast("The starting sky: Ctrl Z brings yours back");
+    }
+  });
+  $("aboutBtn").addEventListener("click", () => $("about").showModal());
+
+  const dlg = $("saveDlg");
+  $("saveForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    saveNow(cleanName($("saveName").value));
+    dlg.close();
+  });
+  dlg.querySelector("[data-close]").addEventListener("click", () => dlg.close());
+  $("saveAs").addEventListener("click", async () => {
+    if (await saveAs(cleanName($("saveName").value))) dlg.close();
+  });
+  const file = $("openFile");
+  file.addEventListener("change", () => {
+    if (file.files[0]) openFile(file.files[0]);
+    file.value = "";
   });
 }
 
@@ -1367,7 +1305,6 @@ async function main() {
   if (!W.site_init()) throw new Error("the app did not start");
   snapSize = W.site_snapshot_size();
 
-  loadSlots();
   if (!(await fromLink())) {
     const t = storageGet(SESSION_KEY);
     if (t) loadText(t);
@@ -1381,13 +1318,13 @@ async function main() {
   buildArps();
   buildRack();
   const loopSet = $("loopSet");
-  loopSet.appendChild(el("span", "lab", "Bars each side"));
-  loopSet.appendChild(new Seg(T.LOOP, LP.BARS, 0, { label: "Bars each side" }).el);
-  loopSet.appendChild(el("span", "lab", "Count bars of"));
-  loopSet.appendChild(new Choice(T.LOOP, LP.COUNT, 0, { label: "Count bars of" }).el);
+  for (const [label, ctl] of [["Bars each side", new Seg(T.LOOP, LP.BARS, 0, { label: "Bars each side" })],
+    ["Count bars of", new Choice(T.LOOP, LP.COUNT, 0, { label: "Count bars of" })]]) {
+    const pair = loopSet.appendChild(el("div", "pair"));
+    pair.appendChild(el("span", null, label));
+    pair.appendChild(ctl.el);
+  }
   sky.init();
-  pad.init();
-  renderSlots();
   choose(1);
 
   $("play").addEventListener("click", play);
@@ -1398,8 +1335,7 @@ async function main() {
   $("undo").addEventListener("click", undo);
   $("redo").addEventListener("click", redo);
   $("record").addEventListener("click", () => recorder.toggle());
-  $("share").addEventListener("click", shareLink);
-  for (const id of ["helpBtn", "helpLink"]) $(id).addEventListener("click", () => $("help").showModal());
+  bindMenus();
   const vol = $("volume");
   vol.value = String(volume());
   vol.addEventListener("input", () => {
@@ -1421,7 +1357,6 @@ async function main() {
     last = now;
     frameNo++;
     W.site_frame(parseFloat(swell.value) || 0, dt);
-    storeSlots();
     sendSnapshot(now);
     sky.draw();
     refresh();
@@ -1430,6 +1365,10 @@ async function main() {
   refreshAll();
   refresh();
   requestAnimationFrame(frame);
+  if (location.hash === "#about") $("about").showModal();
+  const show = new URLSearchParams(location.search).get("show");      // for screenshots of the menus
+  if (show === "file") $("fileBtn").click();
+  else if (show === "save") openSave();
   if (SELFTEST) selftest();
 }
 
@@ -1506,9 +1445,23 @@ async function selftest() {
     out.skyDrag = [+s2.toFixed(4), +get(T.DRONES, D.SPEED, 2).toFixed(4), text(T.DRONES, D.SPEED, 2)];
     const packed = await pack(sessionText());
     out.link = { chars: packed.length, same: (await unpack(packed)) === sessionText() };
-    W.site_slot_save(2);
-    storeSlots();
-    out.slot3 = cstr(W.site_slot_title(2));
+    $("fileBtn").click();
+    out.menuOpen = !$("fileMenu").hidden;
+    $("fileMenu").querySelector("[data-act=save]").click();
+    out.saveDialog = [$("saveDlg").open, $("saveName").value];
+    $("saveName").value = "my sky";
+    $("saveForm").requestSubmit();
+    out.saved = [saving.lastBlob, $("saveDlg").open];
+    const savedText = sessionText();
+    W.site_set(T.DRONES, D.ROOT, 0, 300);
+    await openFile(new File([savedText], "my sky.txt", { type: "text/plain" }));
+    out.reopened = text(T.DRONES, D.ROOT, 0);
+    await openFile(new File(["not a sound"], "notes.txt", { type: "text/plain" }));
+    out.badFile = $("toast").textContent;
+    $("aboutBtn").click();
+    out.about = $("about").open;
+    $("about").close();
+    await wait(700);                         // opening a file starts from the top, which ends a loop
     $("loopBig").click();
     await wait(800);
     out.loopRec = [info[7], $("loopText").textContent];

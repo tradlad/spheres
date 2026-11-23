@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Spheres</title>
-<meta name="description" content="Spheres: drones at the centre, arpeggios circling them. A generative instrument made for the TrimUI Brick Pro handheld, playable in your browser.">
+<meta name="description" content="Spheres: drones at the centre, arpeggios circling them. A generative instrument that plays in your browser.">
 <meta name="theme-color" content="#0b0e13">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0f13'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23424856' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ffcd6e'/%3E%3Ccircle cx='24' cy='9' r='3' fill='%2382aaff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="site.css">
@@ -17,6 +17,23 @@
     <h1>Spheres</h1>
     <p>drones at the centre, arpeggios circling them</p>
   </div>
+
+  <nav class="menus" aria-label="Menus">
+    <div class="menu">
+      <button id="fileBtn" class="menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="fileMenu">
+        File
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div id="fileMenu" class="menu-list" role="menu" aria-labelledby="fileBtn" hidden>
+        <button type="button" role="menuitem" data-act="save">Save…<kbd data-keys="S"></kbd></button>
+        <button type="button" role="menuitem" data-act="open">Open…<kbd data-keys="O"></kbd></button>
+        <button type="button" role="menuitem" data-act="link">Copy a link to this sound</button>
+        <div class="menu-sep" role="separator"></div>
+        <button type="button" role="menuitem" data-act="fresh">Start over</button>
+      </div>
+    </div>
+    <button id="aboutBtn" class="menu-btn" type="button" aria-haspopup="dialog">About</button>
+  </nav>
 
   <div class="group transport">
     <button id="play" class="play" type="button" aria-label="Play" title="Play or stop (Space)">
@@ -48,7 +65,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h4"/></svg>
     </button>
     <div id="meter" class="meter" aria-hidden="true"><span></span><span></span></div>
-    <label class="volume" title="This page's volume">
+    <label class="volume" title="Volume">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>
       <span class="sr">Volume</span>
       <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8">
@@ -56,129 +73,131 @@
     <button id="record" class="tool" type="button" title="Record what you hear to a WAV file">
       <span class="rec-dot" aria-hidden="true"></span><span class="rec-word">Record</span>
     </button>
-    <button id="share" class="tool" type="button" title="Copy a link that holds this whole sky">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>
-      <span class="word">Copy link</span>
-    </button>
-    <button id="helpBtn" class="tool icon" type="button" aria-label="Help" title="Help (?)">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.6"/><path d="M12 17h.01"/></svg>
-    </button>
   </div>
 </header>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <main class="grid">
-  <section class="pane drones" aria-labelledby="h-drones">
+  <section class="pane drones" aria-label="Space and the drones">
     <div class="module space">
-      <div class="head"><h2 id="h-space">Space</h2><p>all four drones</p></div>
+      <div class="head"><h2>Space</h2><p>all four drones</p></div>
       <div id="space"></div>
+      <div class="live">
+        <button id="comet" class="tool" type="button" title="Send a comet through the drones (C)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="17" cy="7" r="3"/><path d="M14.8 9.2L4 20"/><path d="M13.5 6L7 12.5"/><path d="M18 10.5L11.5 17"/></svg>
+          Comet <kbd>C</kbd>
+        </button>
+        <button id="hold" class="tool" type="button" aria-pressed="false" title="Hold the drones' tuning where it is (H)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14"/><path d="M15 5v14"/></svg>
+          Hold tuning <kbd>H</kbd>
+        </button>
+        <label class="swell" title="Presses the chosen drone harder or softer while you hold it; it springs back">
+          <span>Swell</span>
+          <input id="swell" type="range" min="-1" max="1" step="0.01" value="0">
+        </label>
+      </div>
     </div>
-    <div class="module">
-      <div class="head"><h2 id="h-drones">Drones</h2><p>the sun and planets 1–3</p></div>
+    <div class="module grow">
+      <div class="head"><h2>Drones</h2><p>the sun and planets 1–3</p></div>
       <div id="droneMatrix" class="matrix"></div>
     </div>
   </section>
 
-  <section class="center">
+  <section class="center" aria-label="The sky and the looper">
     <div class="pane sky-pane">
       <div class="head"><h2>Sky</h2><p>click a planet to find its controls · drag it up or down</p></div>
-      <div class="sky-wrap">
+      <div class="sky-area">
         <div class="sky-box">
           <canvas id="sky" role="img" aria-label="The sky: the sun and its planets"></canvas>
           <div id="dragNote" class="drag-note" aria-hidden="true"></div>
           <button id="startHint" class="start-hint" type="button">Press Play or Space to hear it</button>
         </div>
-        <div id="inspector" class="inspector" aria-live="off"></div>
       </div>
+      <div id="inspector" class="inspector" aria-live="off"></div>
     </div>
 
-    <div class="row2">
-      <div class="pane looper">
-        <div class="head"><h2>Looper</h2><p>loops the playing, not a recording</p></div>
-        <div class="loop-main">
-          <button id="loopBig" class="loop-big" type="button" aria-pressed="false">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
-            <span>Loop</span>
-          </button>
-          <p id="loopText" class="loop-text"></p>
-        </div>
-        <div id="loopCells" class="loop-cells" aria-hidden="true"></div>
-        <div id="loopSet" class="loop-set"></div>
+    <div class="pane looper">
+      <div class="head"><h2>Looper</h2><p>loops the playing, not a recording</p></div>
+      <div class="loop-main">
+        <button id="loopBig" class="loop-big" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+          <span>Loop</span>
+        </button>
+        <p id="loopText" class="loop-text"></p>
       </div>
-
-      <div class="pane playit">
-        <div class="head"><h2>Play it</h2><p>what the Brick's sticks do</p></div>
-        <div class="playit-body">
-          <div id="pad" class="pad" role="slider" tabindex="0" aria-label="Gravity, up, and wander, right"
-               title="Drag: gravity up and down, wander left and right">
-            <span class="pad-x" aria-hidden="true"></span><span class="pad-y" aria-hidden="true"></span>
-            <span class="pad-dot" aria-hidden="true"></span>
-            <span class="pad-label top" aria-hidden="true">gravity</span>
-            <span class="pad-label right" aria-hidden="true">wander</span>
-          </div>
-          <div class="playit-side">
-            <button id="comet" class="tool" type="button" title="Send a comet through the drones (C)">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="17" cy="7" r="3"/><path d="M14.8 9.2L4 20"/><path d="M13.5 6L7 12.5"/><path d="M18 10.5L11.5 17"/></svg>
-              Comet <kbd>C</kbd>
-            </button>
-            <button id="hold" class="tool" type="button" aria-pressed="false" title="Hold the drones' tuning where it is (H)">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14"/><path d="M15 5v14"/></svg>
-              Hold tuning <kbd>H</kbd>
-            </button>
-            <label class="swell">
-              <span>Swell <small>the chosen drone's pressure, while held</small></span>
-              <input id="swell" type="range" min="-1" max="1" step="0.01" value="0">
-            </label>
-          </div>
-        </div>
-      </div>
+      <div id="loopCells" class="loop-cells" aria-hidden="true"></div>
+      <div id="loopSet" class="loop-set"></div>
     </div>
   </section>
 
-  <section class="pane arps" aria-labelledby="h-arps">
-    <div class="module">
-      <div class="head"><h2 id="h-arps">Arps</h2><p>planets 4–6, side by side</p></div>
+  <section class="pane arps" aria-label="The arps">
+    <div class="module grow">
+      <div class="head"><h2>Arps</h2><p>planets 4–6, side by side</p></div>
       <div id="arpMatrix" class="matrix"></div>
     </div>
   </section>
 
-  <section class="rack" aria-label="Sound and saves">
+  <section class="rack" aria-label="Sound">
     <div class="rack-head"><h2>Sound</h2><p>the drones and the notes each have their own tone and effects</p></div>
     <div id="rack" class="rack-row"></div>
   </section>
 </main>
 
-<footer>
-  <p>Spheres is an instrument for the TrimUI Brick Pro handheld. This page runs the same C program, compiled for your browser.</p>
-  <p><button id="helpLink" class="linklike" type="button">Help and keys</button> · <a href="LICENSE-fonts.txt">Fonts licence</a></p>
-</footer>
+<dialog id="saveDlg" class="small" aria-labelledby="save-title">
+  <form id="saveForm" method="dialog">
+    <h2 id="save-title">Save this sound</h2>
+    <p>Everything you hear now goes into one small text file. File › Open brings it back.</p>
+    <label class="field-label" for="saveName">File name</label>
+    <input id="saveName" class="text-in" type="text" spellcheck="false" autocomplete="off">
+    <p id="saveWhere" class="note">It goes to your downloads folder.</p>
+    <div class="dlg-btns">
+      <button id="saveAs" class="tool" type="button" hidden>Choose a folder…</button>
+      <span class="spacer"></span>
+      <button class="tool" type="button" value="cancel" data-close>Cancel</button>
+      <button class="tool primary" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
 
-<dialog id="help" aria-labelledby="help-title">
-  <form method="dialog" class="help-close"><button class="tool icon" aria-label="Close">
+<input id="openFile" type="file" accept=".txt,text/plain" hidden>
+
+<dialog id="about" aria-labelledby="about-title">
+  <form method="dialog" class="dlg-close"><button class="tool icon" aria-label="Close">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
   </button></form>
-  <h2 id="help-title">Spheres</h2>
-  <p>At the centre the sun and planets 1 to 3 drone, tuned to each other in just intervals: a planet's speed is its pitch and its orbit together. Gravity pulls the drones into simple ratios; wander and comets pull them out again. Round them, planets 4, 5 and 6 each play an arpeggio, its notes sitting on its circle and lighting as they sound.</p>
-  <h3>Changing things</h3>
+  <h2 id="about-title">About Spheres</h2>
+  <p class="lede">Spheres is a generative instrument: a small solar system that plays music. At its centre the sun and three planets hold long, slowly shifting drones; around them three more planets play arpeggios. You set it going and shape it while you listen. Nothing has to be played note by note.</p>
+
+  <h3>How it works</h3>
+  <p><b>The drones.</b> A droning planet's speed is its pitch. One set at 3:2 sounds a fifth above the sun, and circles three times while the sun's beam turns twice. Simple ratios like 3:2, 4:3 and 5:4 sound smooth and still. Gravity pulls the drones towards them; wander and comets push them away again, so the harmony breathes. The panel under the sky shows how each drone sits with the others: locked, gently beating, or rough.</p>
+  <p><b>The arps.</b> Planets 4, 5 and 6 each play an arpeggio from a scale, in a meter of their own. Their notes sit round their circle and light up as they sound. Each can start over every few bars or with another planet, skip notes by chance, change a few notes as it goes, or move through the scale's chords.</p>
+  <p><b>The looper.</b> Loop takes the bars just played and as many still to come, and plays them again and again, exactly: the same notes, chances and movements, not a recording. While it loops, only the Sound settings change. Press it again to carry on from there.</p>
+  <p><b>The tuning.</b> Everything is tuned in just intervals above one root note. Move the root and the whole system moves with it.</p>
+
+  <h3>Getting started</h3>
+  <ol>
+    <li>Press <b>Play</b> (or <kbd>Space</kbd>) and listen for a while.</li>
+    <li>Click a planet in the sky. Its column lights up, and the panel under the sky says what it is doing.</li>
+    <li>Click a key on the piano under <b>Root</b> to move everything to another note.</li>
+    <li>Try another <b>Voice</b> for a drone, or another <b>Instrument</b> or <b>Scale</b> for an arp.</li>
+    <li>Turn up <b>Gravity</b> to hear the drones settle, or <b>Wander</b> to set them drifting.</li>
+    <li>When you like what you hear, press <b>Loop</b>. <b>File › Save</b> keeps the sound for another day.</li>
+  </ol>
+
+  <h3>Changing values</h3>
   <ul>
-    <li><b>Drag</b> any value: right or up for more. Hold <kbd>Shift</kbd> to go finely.</li>
+    <li><b>Drag</b> a value: right or up for more. Hold <kbd>Shift</kbd> to go finely.</li>
     <li><b>Double-click</b> a value to type it: <code>231</code> or <code>Bb3</code> for the root, <code>3:2</code> for a speed.</li>
-    <li>With a value chosen, <kbd>↑</kbd> <kbd>↓</kbd> step it as the Brick does (<kbd>Shift</kbd> for big steps), and <kbd>Delete</kbd> puts it back to the start.</li>
-    <li>Everything can be undone: <kbd>Ctrl Z</kbd>, and <kbd>Ctrl Shift Z</kbd> to redo.</li>
+    <li>With a value chosen, the arrow keys step it (<kbd>Shift</kbd> for big steps), and <kbd>Delete</kbd> puts back the value it started with.</li>
+    <li>On the sky, drag a drone up or down to change its speed. Let go near a simple ratio with the sun and it settles there; hold <kbd>Alt</kbd> to leave it free. Drag the sun to move the root, or an arp planet for shorter or longer notes. Double-click a planet to turn it on or off.</li>
+    <li><kbd>Ctrl Z</kbd> undoes, <kbd>Ctrl Shift Z</kbd> redoes.</li>
   </ul>
-  <h3>The sky</h3>
-  <ul>
-    <li>Click a body to choose it: its column lights up and the panel beside the sky says what it is doing.</li>
-    <li>Drag a drone up or down to change its speed. Let go near a simple ratio with the sun and it settles on it; hold <kbd>Alt</kbd> to leave it free. Dragging the sun moves the root.</li>
-    <li>Drag an arp planet up or down for shorter or longer notes. Double-click a body to turn it on or off.</li>
-  </ul>
-  <h3>The looper</h3>
-  <p>Loop takes the bars before now and as many after, and plays them again and again: the same notes, dice, orbits and moves, not a recording. While it loops only the Sound settings change. Loop again to carry on from there.</p>
-  <h3>Saves and the Brick</h3>
-  <p>The eight slots stay in this browser. A slot's download is the Brick's own file: put <code>slot1.txt</code> to <code>slot8.txt</code> in <code>Tools/tg5040/Spheres.pak/saves/</code> on the SD card, and the Brick's files open here too. Copy link puts the whole sky in a link.</p>
+
   <h3>Keys</h3>
-  <p><kbd>Space</kbd> play or stop · <kbd>L</kbd> loop · <kbd>C</kbd> comet · <kbd>H</kbd> hold tuning · <kbd>0</kbd> to <kbd>6</kbd> choose the sun or a planet · <kbd>?</kbd> this help</p>
+  <p><kbd>Space</kbd> play or stop · <kbd>L</kbd> loop · <kbd>C</kbd> comet · <kbd>H</kbd> hold the tuning · <kbd>0</kbd> to <kbd>6</kbd> choose the sun or a planet · <kbd>Ctrl S</kbd> save · <kbd>Ctrl O</kbd> open · <kbd>?</kbd> this page</p>
+
+  <p class="credits">Spheres remembers where you left off in this browser. The fonts in its engine are the Go fonts, under a BSD licence (<a href="LICENSE-fonts.txt">details</a>).</p>
 </dialog>
 
 </body>

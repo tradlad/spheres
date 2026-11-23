@@ -1,4 +1,4 @@
-// Audio worklet for the Spheres website: runs the engine (the Brick's C, as
+// Audio worklet for the Spheres website: runs the engine (C, compiled to
 // WebAssembly) on the audio thread. The page posts the app's snapshots;
 // this posts back the engine's state, the output levels and, while the
 // page records, the sound itself in quarter-second chunks.
